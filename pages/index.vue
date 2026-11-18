@@ -1457,7 +1457,7 @@ const selectTab = (id) => {
                 </div>
                 <div class="flex items-center gap-1.5 flex-wrap">
                   <button
-                    v-for="st in ['all', 'pending', 'preparing', 'ready', 'delivered', 'cancelled']"
+                    v-for="st in ['all', 'pending', 'preparing', 'cancelled']"
                     :key="st"
                     type="button"
                     :class="[
@@ -1528,22 +1528,6 @@ const selectTab = (id) => {
                           <span>{{ t.rejectOrder }}</span>
                         </button>
                       </template>
-                      <button
-                        v-else-if="ord.status === 'preparing'"
-                        type="button"
-                        class="h-9 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
-                        @click="updateOrderStatus(ord.id, 'ready')"
-                      >
-                        {{ t.markReady }}
-                      </button>
-                      <button
-                        v-else-if="ord.status === 'ready'"
-                        type="button"
-                        class="h-9 px-3.5 rounded-xl bg-[#1D1D1F] hover:bg-black text-white text-xs font-bold cursor-pointer"
-                        @click="updateOrderStatus(ord.id, 'delivered')"
-                      >
-                        {{ t.markDelivered }}
-                      </button>
                     </div>
 
                     <!-- Inline Preparation Time Picker when Accepting -->
@@ -1651,25 +1635,6 @@ const selectTab = (id) => {
                     {{ t.rejectOrder }}
                   </button>
                 </div>
-              </div>
-
-              <div v-else class="pt-2 flex flex-wrap gap-2">
-                <button
-                  v-if="selectedOrder.status === 'preparing'"
-                  type="button"
-                  class="flex-1 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
-                  @click="updateOrderStatus(selectedOrder.id, 'ready')"
-                >
-                  {{ t.markReady }}
-                </button>
-                <button
-                  v-if="selectedOrder.status === 'ready'"
-                  type="button"
-                  class="flex-1 h-10 rounded-full bg-[#1D1D1F] hover:bg-black text-white text-xs font-bold cursor-pointer"
-                  @click="updateOrderStatus(selectedOrder.id, 'delivered')"
-                >
-                  {{ t.markDelivered }}
-                </button>
               </div>
             </aside>
           </div>
