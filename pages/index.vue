@@ -1359,48 +1359,6 @@ const selectTab = (id) => {
         </div>
 
         <div class="flex items-center gap-2.5 shrink-0">
-          <!-- Restaurant Panel Switcher -->
-          <div class="inline-flex items-center gap-1 p-1 rounded-full bg-[#F5F5F7] border border-[#E5E5EA]">
-            <div class="relative flex items-center">
-              <span class="absolute left-2.5 flex h-3.5 w-3.5 items-center justify-center text-[#0066CC] pointer-events-none">
-                <Store :size="13" :stroke-width="2" class="block" />
-              </span>
-              <select
-                :value="activePanelId"
-                :aria-label="t.switchRestaurant"
-                class="h-7 rounded-full bg-white border border-[#E5E5EA] pl-7 pr-3 text-[11px] font-bold leading-none text-[#1D1D1F] focus:border-[#0066CC] focus:outline-none cursor-pointer max-w-[160px] sm:max-w-[200px] truncate"
-                @change="switchRestaurantPanel($event.target.value)"
-              >
-                <option v-for="panel in restaurantPanels" :key="panel.id" :value="panel.id">
-                  {{ panel.store.name }}
-                </option>
-              </select>
-            </div>
-            <button
-              type="button"
-              :title="t.addRestaurant"
-              class="h-7 w-7 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white flex items-center justify-center cursor-pointer transition-colors shrink-0"
-              @click="showNewRestaurantModal = true"
-            >
-              <Plus :size="13" :stroke-width="2.5" />
-            </button>
-          </div>
-
-          <!-- Install Status Pill -->
-          <button
-            type="button"
-            :class="[
-              'hidden md:inline-flex h-9 px-3 rounded-full text-[11px] font-bold leading-none items-center gap-1.5 border cursor-pointer transition-colors',
-              installation.installed
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-            ]"
-            @click="selectTab('settings'); settingsSubTab = 'install'"
-          >
-            <Rocket :size="13" :stroke-width="2" class="block" />
-            <span>{{ installation.installed ? t.installComplete : t.installPending }}</span>
-          </button>
-
           <div class="relative flex items-center">
             <span class="absolute left-3 flex h-4 w-4 items-center justify-center text-[#6E6E73] pointer-events-none">
               <Globe :size="14" :stroke-width="2" class="block" />
@@ -2374,36 +2332,13 @@ const selectTab = (id) => {
                 </button>
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
+                <div class="sm:col-span-2">
                   <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.storeName }}</label>
                   <input
                     v-model="store.name"
                     type="text"
                     class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs"
                   />
-                </div>
-                <div>
-                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.switchRestaurant }}</label>
-                  <div class="flex items-center gap-2">
-                    <select
-                      :value="activePanelId"
-                      class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
-                      @change="switchRestaurantPanel($event.target.value)"
-                    >
-                      <option v-for="panel in restaurantPanels" :key="panel.id" :value="panel.id">
-                        {{ panel.store.name }}
-                      </option>
-                    </select>
-                    <button
-                      v-if="restaurantPanels.length > 1"
-                      type="button"
-                      :title="t.deleteRestaurant"
-                      class="h-11 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold shrink-0 cursor-pointer"
-                      @click="deleteRestaurantPanel(activePanelId)"
-                    >
-                      <Trash2 :size="14" />
-                    </button>
-                  </div>
                 </div>
                 <div>
                   <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.phone }}</label>
