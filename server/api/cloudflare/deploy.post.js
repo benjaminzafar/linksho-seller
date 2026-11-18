@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
     const cfToken = String(env.CLOUDFLARE_API_TOKEN || body.cfToken || '').trim();
     const envAccountId = String(env.CLOUDFLARE_ACCOUNT_ID || '').trim();
     const storeName = String(body.name || '').trim();
-    const storeType = body.type === 'restaurant' ? 'restaurant' : 'webshop';
+    const storeType = 'restaurant';
     const currency = ['SEK', 'NOK', 'DKK', 'EUR'].includes(body.currency) ? body.currency : 'SEK';
     const shippingFee = Math.max(0, Number(body.shippingFee) || 0);
     const phone = String(body.phone || '').trim();

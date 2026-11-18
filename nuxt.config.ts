@@ -12,7 +12,7 @@ export default defineNuxtConfig({
       htmlAttrs: { lang: 'en', dir: 'ltr' },
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        { name: 'description', content: 'Seller pannel — Multi-language Merchant Dashboard for Restaurants & Online Stores' },
+        { name: 'description', content: 'Seller pannel — Multi-language Merchant Dashboard for Restaurants' },
       ],
       link: [
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
