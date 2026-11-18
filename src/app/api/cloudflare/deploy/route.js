@@ -41,27 +41,36 @@ async function cfFetch(path, token, opts = {}) {
 export async function POST(req) {
   try {
     const body = await req.json();
-    const cfToken = String(body.cfToken || '').trim();
+    // Always prefer owner's server-side Cloudflare Token & Account ID for security and billing control
+    const cfToken = String(process.env.CLOUDFLARE_API_TOKEN || body.cfToken || '').trim();
+    const envAccountId = String(process.env.CLOUDFLARE_ACCOUNT_ID || '').trim();
     const storeName = String(body.name || '').trim();
     const storeType = body.type === 'restaurant' ? 'restaurant' : 'webshop';
     const currency = ['SEK', 'NOK', 'DKK', 'EUR'].includes(body.currency) ? body.currency : 'SEK';
     const shippingFee = Math.max(0, Number(body.shippingFee) || 0);
     const phone = String(body.phone || '').trim();
 
-    if (!cfToken || !storeName) {
+    if (!storeName) {
+      return jsonRes({ ok: false, error: 'نام فروشگاه یا رستوران الزامی است.' }, 400);
+    }
+
+    if (!cfToken) {
       return jsonRes(
-        { ok: false, error: 'توکن کلودفلر و نام فروشگاه/رستوران الزامی است.' },
-        400
+        { ok: false, error: 'توکن کلودفلر روی سرور تنظیم نشده است (CLOUDFLARE_API_TOKEN).' },
+        500
       );
     }
 
-    // 1. Verify Cloudflare Token & Auto-detect Account ID
-    const accRes = await cfFetch('/accounts?per_page=5', cfToken);
-    if (!accRes.ok || !Array.isArray(accRes.data?.result) || accRes.data.result.length === 0) {
-      const msg = accRes.data?.errors?.[0]?.message || 'توکن کلودفلر معتبر نیست یا دسترسی Account ندارد.';
-      return jsonRes({ ok: false, error: msg }, 401);
+    // 1. Resolve Cloudflare Account ID
+    let accountId = envAccountId || String(body.accountId || '').trim();
+    if (!accountId) {
+      const accRes = await cfFetch('/accounts?per_page=5', cfToken);
+      if (!accRes.ok || !Array.isArray(accRes.data?.result) || accRes.data.result.length === 0) {
+        const msg = accRes.data?.errors?.[0]?.message || 'توکن کلودفلر معتبر نیست یا دسترسی Account ندارد.';
+        return jsonRes({ ok: false, error: msg }, 401);
+      }
+      accountId = accRes.data.result[0].id;
     }
-    const accountId = String(body.accountId || '').trim() || accRes.data.result[0].id;
 
     // 2. Get Workers.dev Subdomain
     const subRes = await cfFetch(`/accounts/${accountId}/workers/subdomain`, cfToken);
@@ -70,13 +79,13 @@ export async function POST(req) {
       return jsonRes(
         {
           ok: false,
-          error: 'ابتدا در پنل کلودفلر (Workers & Pages) یک ساب‌دامین رایگان workers.dev فعال کنید و دوباره تلاش نمایید.',
+          error: 'ساب‌دامین workers.dev در حساب کلودفلر فعال نیست.',
         },
         400
       );
     }
 
-    // 3. Create Isolated Cloudflare D1 Database on Buyer's Account
+    // 3. Create Isolated Cloudflare D1 Database on Owner's Account
     const suffix = crypto.randomBytes(3).toString('hex');
     const dbName = `linksho-seller-${suffix}`;
     const workerName = `linksho-seller-${suffix}`;
@@ -88,7 +97,7 @@ export async function POST(req) {
     });
 
     if (!dbRes.ok || !dbRes.data?.result?.uuid) {
-      const errMsg = dbRes.data?.errors?.[0]?.message || 'خطا در ساخت دیتابیس D1 روی کلودفلر (دسترسی D1:Edit را بررسی کنید).';
+      const errMsg = dbRes.data?.errors?.[0]?.message || 'خطا در ساخت دیتابیس D1 روی کلودفلر.';
       return jsonRes({ ok: false, error: errMsg }, 400);
     }
     const dbId = dbRes.data.result.uuid;
@@ -127,7 +136,7 @@ export async function POST(req) {
 
     if (!initSqlRes.ok) {
       const errMsg = initSqlRes.data?.errors?.[0]?.message || 'خطا در ساخت جداول دیتابیس D1';
-      return NextResponse.json({ ok: false, error: errMsg }, { status: 500 });
+      return jsonRes({ ok: false, error: errMsg }, 500);
     }
 
     await cfFetch(`/accounts/${accountId}/d1/database/${dbId}/query`, cfToken, {
@@ -139,7 +148,7 @@ export async function POST(req) {
       }),
     });
 
-    // 5. Upload Self-Contained Worker Script + D1 Binding (Zero Source Code Exposed)
+    // 5. Upload Self-Contained Worker Script + D1 Binding
     const workerCode = buildSellerWorkerScript();
     const formData = new FormData();
     formData.append(
@@ -168,8 +177,8 @@ export async function POST(req) {
     );
 
     if (!uploadRes.ok) {
-      const errMsg = uploadRes.data?.errors?.[0]?.message || 'خطا در آپلود Worker روی کلودفلر (دسترسی Workers Scripts:Edit را بررسی کنید).';
-      return NextResponse.json({ ok: false, error: errMsg }, { status: 500 });
+      const errMsg = uploadRes.data?.errors?.[0]?.message || 'خطا در آپلود Worker روی کلودفلر.';
+      return jsonRes({ ok: false, error: errMsg }, 500);
     }
 
     // 6. Enable workers.dev Subdomain Route
@@ -186,23 +195,65 @@ export async function POST(req) {
     const panelUrl = `https://${workerName}.${subdomain}.workers.dev`;
     const storefrontApiUrl = `${panelUrl}/api/storefront?key=${apiKey}`;
 
-    return NextResponse.json(
-      {
-        ok: true,
-        panelUrl,
-        storefrontApiUrl,
-        storeId,
-        pinCode,
-        apiKey,
-        dbId,
-        workerName,
-      },
-      { headers: CORS_HEADERS }
-    );
+    return jsonRes({
+      ok: true,
+      panelUrl,
+      storefrontApiUrl,
+      storeId,
+      pinCode,
+      apiKey,
+      dbId,
+      workerName,
+      name: storeName,
+      type: storeType,
+      currency,
+      createdAt: initialConfig.createdAt,
+    });
   } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: err?.message || 'خطا در دیپلوی خودکار کلودفلر' },
-      { status: 500, headers: CORS_HEADERS }
-    );
+    return jsonRes({ ok: false, error: err?.message || 'خطا در دیپلوی خودکار کلودفلر' }, 500);
+  }
+}
+
+// Admin Delete / Terminate a Seller Worker & D1 Database (e.g., if subscription unpaid)
+export async function DELETE(req) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const workerName = String(searchParams.get('workerName') || '').trim();
+    const dbId = String(searchParams.get('dbId') || '').trim();
+    const adminSecret = req.headers.get('x-admin-secret') || searchParams.get('secret') || '';
+
+    const expectedSecret = process.env.SELLER_ADMIN_SECRET || '';
+    if (expectedSecret && adminSecret !== expectedSecret) {
+      return jsonRes({ ok: false, error: 'دسترسی غیرمجاز' }, 401);
+    }
+
+    const cfToken = String(process.env.CLOUDFLARE_API_TOKEN || '').trim();
+    if (!cfToken) {
+      return jsonRes({ ok: false, error: 'CLOUDFLARE_API_TOKEN تنظیم نشده است.' }, 500);
+    }
+
+    let accountId = String(process.env.CLOUDFLARE_ACCOUNT_ID || '').trim();
+    if (!accountId) {
+      const accRes = await cfFetch('/accounts?per_page=5', cfToken);
+      accountId = accRes.data?.result?.[0]?.id || '';
+    }
+    if (!accountId) {
+      return jsonRes({ ok: false, error: 'Account ID یافت نشد.' }, 400);
+    }
+
+    if (workerName) {
+      await cfFetch(`/accounts/${accountId}/workers/scripts/${encodeURIComponent(workerName)}`, cfToken, {
+        method: 'DELETE',
+      });
+    }
+    if (dbId) {
+      await cfFetch(`/accounts/${accountId}/d1/database/${encodeURIComponent(dbId)}`, cfToken, {
+        method: 'DELETE',
+      });
+    }
+
+    return jsonRes({ ok: true, deleted: { workerName, dbId } });
+  } catch (err) {
+    return jsonRes({ ok: false, error: err?.message || 'خطا در حذف سرویس فروشنده' }, 500);
   }
 }
