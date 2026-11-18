@@ -87,10 +87,10 @@ export async function POST(req) {
       );
     }
 
-    // 3. Create Isolated Cloudflare D1 Database on Owner's Account
-    const suffix = crypto.randomBytes(3).toString('hex');
-    const dbName = `linksho-seller-${suffix}`;
-    const workerName = `linksho-seller-${suffix}`;
+    // 3. Create Isolated Cloudflare D1 Database on Owner's Account (4-byte unique suffix supports thousands of stores)
+    const suffix = crypto.randomBytes(4).toString('hex');
+    const dbName = `linksho-db-${suffix}`;
+    const workerName = `linksho-site-${suffix}`;
 
     const dbRes = await cfFetch(`/accounts/${accountId}/d1/database`, cfToken, {
       method: 'POST',
