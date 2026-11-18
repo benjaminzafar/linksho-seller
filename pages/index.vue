@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   ShoppingBag,
   Package,
+  Users,
   Send,
   CreditCard,
   Settings,
@@ -12,54 +13,57 @@ import {
   X,
   Plus,
   Trash2,
+  Pencil,
   CheckCircle2,
-  ShieldCheck,
   Globe,
   Store,
   TrendingUp,
   Clock,
   Lock,
+  Phone,
+  MapPin,
 } from 'lucide-vue-next';
 import { SELLER_LANGUAGES, TRANSLATIONS } from '~/utils/i18n';
 
-const STORAGE_KEY = 'seller_pannel_state_v1';
+const STORAGE_KEY = 'seller_pannel_v2';
 
 const lang = ref('en');
-const activeTab = ref('overview'); // 'overview' | 'orders' | 'products' | 'telegram' | 'payments' | 'settings'
+const activeTab = ref('overview'); // 'overview' | 'orders' | 'products' | 'customers' | 'telegram' | 'payments' | 'settings'
 const mobileNavOpen = ref(false);
 const searchQuery = ref('');
 const orderFilter = ref('all');
+const categoryFilter = ref('all');
+const selectedOrderId = ref('');
 const toastMsg = ref('');
 
 const store = ref({
-  name: 'Nordic Kitchen & Market',
+  name: 'Stockholm Bistro',
   type: 'restaurant',
   isOpen: true,
   currency: 'SEK',
   shippingFee: 49,
+  freeShippingOver: 500,
   phone: '+46 70 123 45 67',
   address: 'Sveavägen 42, Stockholm',
-  customDomain: 'order.nordickitchen.se',
+  customDomain: 'order.stockholmbistro.se',
 });
 
 const stripeConfig = ref({
-  mode: 'test',
-  publishableKey: 'pk_test_51ExampleKey000000',
-  enabled: true,
+  mode: 'live',
+  publishableKey: '',
 });
 
 const telegramConfig = ref({
   botToken: '',
   chatId: '',
-  enabled: true,
 });
 
 const products = ref([
-  { id: 'PRD-101', name: 'Saffron Kebab Plate', category: 'Main Course', price: 169, available: true },
-  { id: 'PRD-102', name: 'Ghormeh Sabzi Bowl', category: 'Main Course', price: 159, available: true },
-  { id: 'PRD-103', name: 'Crispy Tahdig & Stew', category: 'Specials', price: 179, available: true },
-  { id: 'PRD-104', name: 'Cardamom Baklava (4 pcs)', category: 'Desserts', price: 65, available: true },
-  { id: 'PRD-105', name: 'Mint Doogh 500ml', category: 'Drinks', price: 35, available: false },
+  { id: 'PRD-101', name: 'Grilled Lamb Plate', category: 'Main Course', price: 169, available: true, description: 'Served with rice and grilled tomato', image: '' },
+  { id: 'PRD-102', name: 'Herb Stew Bowl', category: 'Main Course', price: 159, available: true, description: 'Slow-cooked herbs, kidney beans and rice', image: '' },
+  { id: 'PRD-103', name: 'Chicken Skewers', category: 'Main Course', price: 149, available: true, description: 'Marinated chicken fillet with saffron', image: '' },
+  { id: 'PRD-104', name: 'Pistachio Baklava', category: 'Desserts', price: 65, available: true, description: '4 pieces', image: '' },
+  { id: 'PRD-105', name: 'Sparkling Mint Drink', category: 'Drinks', price: 35, available: false, description: '500ml bottle', image: '' },
 ]);
 
 const orders = ref([
@@ -67,46 +71,79 @@ const orders = ref([
     id: 'ORD-4821',
     customer: 'Emma Lindqvist',
     phone: '+46 70 441 12 90',
-    items: '2x Saffron Kebab Plate, 1x Mint Doogh',
-    total: 373,
-    payment: 'Stripe • Paid',
+    address: 'Kungsgatan 18, Stockholm',
+    deliveryType: 'Delivery',
+    lines: [
+      { name: 'Grilled Lamb Plate', qty: 2, price: 169 },
+      { name: 'Sparkling Mint Drink', qty: 1, price: 35 },
+    ],
+    subtotal: 373,
+    shipping: 49,
+    total: 422,
+    payment: 'Stripe',
     status: 'pending',
-    time: '4 min ago',
+    time: '4m ago',
   },
   {
     id: 'ORD-4820',
     customer: 'Oskar Bergström',
     phone: '+46 73 882 10 44',
-    items: '1x Crispy Tahdig & Stew, 1x Baklava',
-    total: 244,
-    payment: 'Stripe • Paid',
+    address: 'Pickup at store',
+    deliveryType: 'Pickup',
+    lines: [
+      { name: 'Chicken Skewers', qty: 1, price: 149 },
+      { name: 'Pistachio Baklava', qty: 1, price: 65 },
+    ],
+    subtotal: 214,
+    shipping: 0,
+    total: 214,
+    payment: 'Stripe',
     status: 'preparing',
-    time: '18 min ago',
+    time: '18m ago',
   },
   {
     id: 'ORD-4819',
     customer: 'Sofia Holm',
     phone: '+46 76 210 99 31',
-    items: '3x Ghormeh Sabzi Bowl',
-    total: 477,
-    payment: 'Stripe • Paid',
+    address: 'Odengatan 64, Stockholm',
+    deliveryType: 'Delivery',
+    lines: [{ name: 'Herb Stew Bowl', qty: 3, price: 159 }],
+    subtotal: 477,
+    shipping: 49,
+    total: 526,
+    payment: 'Stripe',
     status: 'ready',
-    time: '32 min ago',
+    time: '32m ago',
   },
   {
     id: 'ORD-4818',
     customer: 'Lukas Nyström',
     phone: '+46 72 904 55 18',
-    items: '2x Saffron Kebab Plate',
+    address: 'Pickup at store',
+    deliveryType: 'Pickup',
+    lines: [{ name: 'Grilled Lamb Plate', qty: 2, price: 169 }],
+    subtotal: 338,
+    shipping: 0,
     total: 338,
-    payment: 'Stripe • Paid',
+    payment: 'Stripe',
     status: 'delivered',
-    time: '1 hr ago',
+    time: '1h ago',
   },
 ]);
 
-const showAddProduct = ref(false);
-const newProduct = ref({ name: '', category: 'Main Course', price: '' });
+const weeklyRevenue = [
+  { day: 'Mon', amount: 1850 },
+  { day: 'Tue', amount: 2340 },
+  { day: 'Wed', amount: 1920 },
+  { day: 'Thu', amount: 2890 },
+  { day: 'Fri', amount: 3640 },
+  { day: 'Sat', amount: 4120 },
+  { day: 'Sun', amount: 3180 },
+];
+
+const showProductForm = ref(false);
+const editingProductId = ref('');
+const productForm = ref({ name: '', category: 'Main Course', price: '', description: '', image: '' });
 
 const t = computed(() => TRANSLATIONS[lang.value] || TRANSLATIONS.en);
 
@@ -114,7 +151,7 @@ const showToast = (msg) => {
   toastMsg.value = msg;
   setTimeout(() => {
     toastMsg.value = '';
-  }, 2600);
+  }, 2200);
 };
 
 onMounted(() => {
@@ -153,9 +190,11 @@ watch(
 );
 
 const totalRevenue = computed(() =>
-  orders.value
-    .filter((o) => o.status !== 'cancelled')
-    .reduce((sum, o) => sum + Number(o.total || 0), 0)
+  weeklyRevenue.reduce((s, d) => s + d.amount, 0)
+);
+
+const maxChartAmount = computed(() =>
+  Math.max(...weeklyRevenue.map((d) => d.amount), 1)
 );
 
 const activeOrdersCount = computed(() =>
@@ -165,8 +204,18 @@ const activeOrdersCount = computed(() =>
 const avgOrderValue = computed(() => {
   const valid = orders.value.filter((o) => o.status !== 'cancelled');
   if (!valid.length) return 0;
-  return Math.round(totalRevenue.value / valid.length);
+  const sum = valid.reduce((s, o) => s + Number(o.total || 0), 0);
+  return Math.round(sum / valid.length);
 });
+
+const orderCountsByStatus = computed(() => ({
+  all: orders.value.length,
+  pending: orders.value.filter((o) => o.status === 'pending').length,
+  preparing: orders.value.filter((o) => o.status === 'preparing').length,
+  ready: orders.value.filter((o) => o.status === 'ready').length,
+  delivered: orders.value.filter((o) => o.status === 'delivered').length,
+  cancelled: orders.value.filter((o) => o.status === 'cancelled').length,
+}));
 
 const filteredOrders = computed(() => {
   const q = searchQuery.value.trim().toLowerCase();
@@ -176,16 +225,50 @@ const filteredOrders = computed(() => {
     return (
       o.id.toLowerCase().includes(q) ||
       o.customer.toLowerCase().includes(q) ||
-      o.items.toLowerCase().includes(q)
+      o.phone.toLowerCase().includes(q) ||
+      o.lines.some((l) => l.name.toLowerCase().includes(q))
     );
   });
+});
+
+const selectedOrder = computed(() =>
+  orders.value.find((o) => o.id === selectedOrderId.value) || null
+);
+
+const productCategories = computed(() => {
+  const set = new Set(products.value.map((p) => p.category).filter(Boolean));
+  return ['all', ...Array.from(set)];
 });
 
 const filteredProducts = computed(() => {
   const q = searchQuery.value.trim().toLowerCase();
   return products.value.filter((p) => {
+    if (categoryFilter.value !== 'all' && p.category !== categoryFilter.value) return false;
     if (!q) return true;
     return p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q);
+  });
+});
+
+const customersList = computed(() => {
+  const map = new Map();
+  for (const o of orders.value) {
+    const key = o.phone || o.customer;
+    const existing = map.get(key) || {
+      name: o.customer,
+      phone: o.phone,
+      address: o.address,
+      ordersCount: 0,
+      totalSpent: 0,
+      lastOrder: o.time,
+    };
+    existing.ordersCount += 1;
+    if (o.status !== 'cancelled') existing.totalSpent += Number(o.total || 0);
+    map.set(key, existing);
+  }
+  const q = searchQuery.value.trim().toLowerCase();
+  return Array.from(map.values()).filter((c) => {
+    if (!q) return true;
+    return c.name.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q);
   });
 });
 
@@ -213,22 +296,59 @@ const updateOrderStatus = (orderId, nextStatus) => {
   showToast(t.value.savedToast);
 };
 
-const addProductItem = () => {
-  const cleanName = newProduct.value.name.trim();
-  const numPrice = Number(newProduct.value.price);
+const openNewProductForm = () => {
+  editingProductId.value = '';
+  productForm.value = { name: '', category: 'Main Course', price: '', description: '', image: '' };
+  showProductForm.value = true;
+};
+
+const openEditProductForm = (p) => {
+  editingProductId.value = p.id;
+  productForm.value = {
+    name: p.name,
+    category: p.category,
+    price: String(p.price),
+    description: p.description || '',
+    image: p.image || '',
+  };
+  showProductForm.value = true;
+};
+
+const saveProductForm = () => {
+  const cleanName = productForm.value.name.trim();
+  const numPrice = Number(productForm.value.price);
   if (!cleanName || Number.isNaN(numPrice) || numPrice <= 0) return;
-  products.value = [
-    {
-      id: `PRD-${Math.floor(100 + Math.random() * 900)}`,
-      name: cleanName,
-      category: newProduct.value.category || 'General',
-      price: numPrice,
-      available: true,
-    },
-    ...products.value,
-  ];
-  newProduct.value = { name: '', category: 'Main Course', price: '' };
-  showAddProduct.value = false;
+
+  if (editingProductId.value) {
+    products.value = products.value.map((p) =>
+      p.id === editingProductId.value
+        ? {
+            ...p,
+            name: cleanName,
+            category: productForm.value.category.trim() || 'General',
+            price: numPrice,
+            description: productForm.value.description.trim(),
+            image: productForm.value.image.trim(),
+          }
+        : p
+    );
+  } else {
+    products.value = [
+      {
+        id: `PRD-${Math.floor(100 + Math.random() * 900)}`,
+        name: cleanName,
+        category: productForm.value.category.trim() || 'General',
+        price: numPrice,
+        description: productForm.value.description.trim(),
+        image: productForm.value.image.trim(),
+        available: true,
+      },
+      ...products.value,
+    ];
+  }
+
+  showProductForm.value = false;
+  editingProductId.value = '';
   showToast(t.value.savedToast);
 };
 
@@ -246,6 +366,7 @@ const navItems = computed(() => [
   { id: 'overview', label: t.value.navOverview, icon: LayoutDashboard },
   { id: 'orders', label: t.value.navOrders, icon: ShoppingBag, badge: activeOrdersCount.value },
   { id: 'products', label: t.value.navProducts, icon: Package, badge: products.value.length },
+  { id: 'customers', label: t.value.navCustomers, icon: Users, badge: customersList.value.length },
   { id: 'telegram', label: t.value.navTelegram, icon: Send },
   { id: 'payments', label: t.value.navPayments, icon: CreditCard },
   { id: 'settings', label: t.value.navSettings, icon: Settings },
@@ -259,7 +380,7 @@ const selectTab = (id) => {
 
 <template>
   <div class="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] flex" dir="ltr">
-    <!-- Toast Notification -->
+    <!-- Toast -->
     <div
       v-if="toastMsg"
       class="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl bg-[#1D1D1F] text-white px-4 py-2.5 shadow-lg text-xs font-semibold"
@@ -268,14 +389,14 @@ const selectTab = (id) => {
       <span>{{ toastMsg }}</span>
     </div>
 
-    <!-- Mobile Drawer Backdrop -->
+    <!-- Mobile Backdrop -->
     <div
       v-if="mobileNavOpen"
       class="fixed inset-0 z-40 bg-black/40 lg:hidden"
       @click="mobileNavOpen = false"
     />
 
-    <!-- Persistent Left Sidebar -->
+    <!-- Sidebar -->
     <aside
       :class="[
         'fixed inset-y-0 left-0 z-50 w-64 bg-[#111214] text-white flex flex-col justify-between transition-transform duration-200 lg:static lg:translate-x-0',
@@ -283,15 +404,14 @@ const selectTab = (id) => {
       ]"
     >
       <div class="p-5 space-y-6">
-        <!-- Brand Header -->
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <div class="h-10 w-10 rounded-xl bg-[#0066CC] flex items-center justify-center font-black text-sm shadow-sm">
+            <div class="h-9 w-9 rounded-xl bg-[#0066CC] flex items-center justify-center font-extrabold text-xs">
               SP
             </div>
             <div>
-              <div class="text-sm font-extrabold tracking-tight">Seller pannel</div>
-              <div class="text-[11px] text-white/55">{{ t.brandSub }}</div>
+              <div class="text-sm font-bold tracking-tight">Seller pannel</div>
+              <div class="text-[11px] text-white/50">{{ t.brandSub }}</div>
             </div>
           </div>
           <button
@@ -303,7 +423,6 @@ const selectTab = (id) => {
           </button>
         </div>
 
-        <!-- Store Live Status Toggle -->
         <button
           type="button"
           class="w-full rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 px-3.5 py-2.5 flex items-center justify-between text-xs font-semibold transition-colors cursor-pointer"
@@ -316,7 +435,6 @@ const selectTab = (id) => {
           <Store :size="14" class="text-white/60" />
         </button>
 
-        <!-- Navigation Menu -->
         <nav class="space-y-1">
           <button
             v-for="item in navItems"
@@ -347,10 +465,9 @@ const selectTab = (id) => {
         </nav>
       </div>
 
-      <!-- Footer SSL & Domain Info -->
-      <div class="p-5 border-t border-white/10 space-y-2 text-[11px] text-white/60">
+      <div class="p-5 border-t border-white/10 space-y-1.5 text-[11px] text-white/60">
         <div class="flex items-center gap-1.5 text-emerald-400 font-semibold">
-          <Lock :size="13" />
+          <Lock :size="12" />
           <span>{{ t.sslActive }}</span>
         </div>
         <div class="truncate font-mono text-white/80">{{ store.customDomain }}</div>
@@ -381,13 +498,7 @@ const selectTab = (id) => {
           </div>
         </div>
 
-        <!-- Country Language Switcher + Security Badge -->
         <div class="flex items-center gap-2.5 shrink-0">
-          <span class="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
-            <ShieldCheck :size="13" />
-            <span>Stripe SSL</span>
-          </span>
-
           <div class="relative flex items-center">
             <Globe :size="14" class="absolute left-3 text-[#6E6E73] pointer-events-none" />
             <select
@@ -402,10 +513,25 @@ const selectTab = (id) => {
         </div>
       </header>
 
-      <!-- Tab Content Area -->
       <main class="p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
         <!-- OVERVIEW TAB -->
         <template v-if="activeTab === 'overview'">
+          <!-- Page Title Bar -->
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 class="text-xl font-extrabold text-[#1D1D1F]">{{ store.name }}</h1>
+              <p class="text-xs text-[#6E6E73]">{{ store.address }}</p>
+            </div>
+            <button
+              type="button"
+              class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+              @click="activeTab = 'products'; openNewProductForm()"
+            >
+              <Plus :size="14" />
+              <span>{{ t.addProduct }}</span>
+            </button>
+          </div>
+
           <!-- KPI Grid -->
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1.5">
@@ -413,7 +539,7 @@ const selectTab = (id) => {
                 <span>{{ t.kpiRevenue }}</span>
                 <TrendingUp :size="15" class="text-[#0066CC]" />
               </div>
-              <div class="text-2xl font-extrabold text-[#1D1D1F] tabular-nums">
+              <div class="text-2xl font-extrabold tabular-nums">
                 {{ totalRevenue.toLocaleString('en-US') }} {{ store.currency }}
               </div>
             </div>
@@ -423,7 +549,7 @@ const selectTab = (id) => {
                 <span>{{ t.kpiOrders }}</span>
                 <Clock :size="15" class="text-amber-600" />
               </div>
-              <div class="text-2xl font-extrabold text-[#1D1D1F] tabular-nums">
+              <div class="text-2xl font-extrabold tabular-nums">
                 {{ activeOrdersCount }}
               </div>
             </div>
@@ -433,7 +559,7 @@ const selectTab = (id) => {
                 <span>{{ t.kpiProducts }}</span>
                 <Package :size="15" class="text-emerald-600" />
               </div>
-              <div class="text-2xl font-extrabold text-[#1D1D1F] tabular-nums">
+              <div class="text-2xl font-extrabold tabular-nums">
                 {{ products.length }}
               </div>
             </div>
@@ -443,13 +569,60 @@ const selectTab = (id) => {
                 <span>{{ t.kpiAvgOrder }}</span>
                 <CreditCard :size="15" class="text-[#0066CC]" />
               </div>
-              <div class="text-2xl font-extrabold text-[#1D1D1F] tabular-nums">
+              <div class="text-2xl font-extrabold tabular-nums">
                 {{ avgOrderValue }} {{ store.currency }}
               </div>
             </div>
           </div>
 
-          <!-- Recent Orders Card -->
+          <!-- 7-Day Revenue Chart + Order Status Summary -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <div class="lg:col-span-8 rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
+              <div class="flex items-center justify-between">
+                <h2 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.revenueChart }}</h2>
+                <span class="text-xs font-bold text-[#0066CC] tabular-nums">
+                  {{ totalRevenue.toLocaleString('en-US') }} {{ store.currency }}
+                </span>
+              </div>
+
+              <div class="h-44 flex items-end justify-between gap-2 sm:gap-3 pt-4">
+                <div
+                  v-for="d in weeklyRevenue"
+                  :key="d.day"
+                  class="flex-1 flex flex-col items-center gap-2 h-full justify-end group"
+                >
+                  <span class="text-[10px] font-bold text-[#6E6E73] opacity-0 group-hover:opacity-100 transition-opacity tabular-nums">
+                    {{ d.amount }}
+                  </span>
+                  <div class="w-full max-w-[38px] bg-[#F0F0F2] rounded-t-lg overflow-hidden flex items-end h-32">
+                    <div
+                      class="w-full bg-[#0066CC] group-hover:bg-[#0055AA] rounded-t-lg transition-all duration-300"
+                      :style="{ height: `${Math.max(10, Math.round((d.amount / maxChartAmount) * 100))}%` }"
+                    />
+                  </div>
+                  <span class="text-[11px] font-semibold text-[#6E6E73]">{{ d.day }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="lg:col-span-4 rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-3">
+              <h2 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.orderSummary }}</h2>
+              <div class="divide-y divide-[#E5E5EA] text-xs">
+                <div
+                  v-for="st in ['pending', 'preparing', 'ready', 'delivered']"
+                  :key="st"
+                  class="py-2.5 flex items-center justify-between"
+                >
+                  <span :class="['px-2.5 py-0.5 rounded-full text-[11px] font-bold border', statusBadgeClass(st)]">
+                    {{ statusLabel(st) }}
+                  </span>
+                  <span class="font-extrabold tabular-nums text-[#1D1D1F]">{{ orderCountsByStatus[st] }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Orders -->
           <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] overflow-hidden">
             <div class="px-5 py-4 border-b border-[#E5E5EA] flex items-center justify-between">
               <h2 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.recentOrders }}</h2>
@@ -462,10 +635,12 @@ const selectTab = (id) => {
               </button>
             </div>
             <div class="divide-y divide-[#E5E5EA]">
-              <div
+              <button
                 v-for="ord in orders.slice(0, 4)"
                 :key="ord.id"
-                class="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                type="button"
+                class="w-full px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-left hover:bg-[#F5F5F7]/70 transition-colors cursor-pointer"
+                @click="selectedOrderId = ord.id; activeTab = 'orders'"
               >
                 <div class="space-y-0.5">
                   <div class="flex items-center gap-2">
@@ -473,7 +648,7 @@ const selectTab = (id) => {
                     <span class="text-xs font-semibold text-[#1D1D1F]">{{ ord.customer }}</span>
                     <span class="text-[11px] text-[#86868B]">• {{ ord.time }}</span>
                   </div>
-                  <p class="text-xs text-[#6E6E73]">{{ ord.items }}</p>
+                  <p class="text-xs text-[#6E6E73]">{{ ord.lines.map((l) => `${l.qty}x ${l.name}`).join(', ') }}</p>
                 </div>
                 <div class="flex items-center gap-3">
                   <span class="text-xs font-extrabold tabular-nums">{{ ord.total }} {{ store.currency }}</span>
@@ -481,115 +656,243 @@ const selectTab = (id) => {
                     {{ statusLabel(ord.status) }}
                   </span>
                 </div>
-              </div>
+              </button>
             </div>
           </div>
         </template>
 
         <!-- ORDERS TAB -->
         <template v-else-if="activeTab === 'orders'">
-          <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navOrders }} ({{ filteredOrders.length }})</h2>
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <button
-                  v-for="st in ['all', 'pending', 'preparing', 'ready', 'delivered', 'cancelled']"
-                  :key="st"
-                  type="button"
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            <div :class="[selectedOrder ? 'lg:col-span-7' : 'lg:col-span-12', 'rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4']">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navOrders }} ({{ filteredOrders.length }})</h2>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    v-for="st in ['all', 'pending', 'preparing', 'ready', 'delivered', 'cancelled']"
+                    :key="st"
+                    type="button"
+                    :class="[
+                      'h-8 px-3 rounded-full text-xs font-semibold cursor-pointer transition-colors',
+                      orderFilter === st ? 'bg-[#1D1D1F] text-white' : 'bg-[#F5F5F7] text-[#6E6E73] hover:text-[#1D1D1F]'
+                    ]"
+                    @click="orderFilter = st"
+                  >
+                    {{ st === 'all' ? `${t.filterAll} (${orderCountsByStatus.all})` : `${statusLabel(st)} (${orderCountsByStatus[st]})` }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
+                <div
+                  v-for="ord in filteredOrders"
+                  :key="ord.id"
                   :class="[
-                    'h-8 px-3 rounded-full text-xs font-semibold cursor-pointer transition-colors',
-                    orderFilter === st ? 'bg-[#1D1D1F] text-white' : 'bg-[#F5F5F7] text-[#6E6E73] hover:text-[#1D1D1F]'
+                    'p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer transition-colors',
+                    selectedOrderId === ord.id ? 'bg-[#0066CC]/[0.05]' : 'hover:bg-[#F5F5F7]/70'
                   ]"
-                  @click="orderFilter = st"
+                  @click="selectedOrderId = ord.id"
                 >
-                  {{ st === 'all' ? t.filterAll : statusLabel(st) }}
+                  <div class="space-y-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="font-mono text-xs font-bold">{{ ord.id }}</span>
+                      <span class="text-xs font-bold text-[#1D1D1F]">{{ ord.customer }}</span>
+                      <span :class="['px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border', statusBadgeClass(ord.status)]">
+                        {{ statusLabel(ord.status) }}
+                      </span>
+                    </div>
+                    <p class="text-xs text-[#515154]">{{ ord.lines.map((l) => `${l.qty}x ${l.name}`).join(', ') }}</p>
+                    <p class="text-[11px] text-[#86868B]">{{ ord.deliveryType }} • {{ ord.payment }} • {{ ord.time }}</p>
+                  </div>
+
+                  <div class="flex items-center gap-2.5 shrink-0" @click.stop>
+                    <span class="text-sm font-extrabold tabular-nums">{{ ord.total }} {{ store.currency }}</span>
+                    <select
+                      :value="ord.status"
+                      class="h-9 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] px-2.5 text-xs font-semibold cursor-pointer"
+                      @change="updateOrderStatus(ord.id, $event.target.value)"
+                    >
+                      <option value="pending">{{ t.statusPending }}</option>
+                      <option value="preparing">{{ t.statusPreparing }}</option>
+                      <option value="ready">{{ t.statusReady }}</option>
+                      <option value="delivered">{{ t.statusDelivered }}</option>
+                      <option value="cancelled">{{ t.statusCancelled }}</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Order Detail Inspector -->
+            <aside v-if="selectedOrder" class="lg:col-span-5 rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4 lg:sticky lg:top-20">
+              <div class="flex items-center justify-between border-b border-[#E5E5EA] pb-3">
+                <div>
+                  <div class="text-[11px] font-bold text-[#86868B]">{{ t.orderDetails }}</div>
+                  <div class="text-base font-extrabold font-mono text-[#1D1D1F]">{{ selectedOrder.id }}</div>
+                </div>
+                <button
+                  type="button"
+                  class="h-8 w-8 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] flex items-center justify-center cursor-pointer"
+                  @click="selectedOrderId = ''"
+                >
+                  <X :size="15" />
                 </button>
               </div>
-            </div>
 
-            <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
-              <div
-                v-for="ord in filteredOrders"
-                :key="ord.id"
-                class="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3"
-              >
-                <div class="space-y-1">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="font-mono text-xs font-bold">{{ ord.id }}</span>
-                    <span class="text-xs font-bold text-[#1D1D1F]">{{ ord.customer }}</span>
-                    <span class="text-xs font-mono text-[#6E6E73]">{{ ord.phone }}</span>
-                    <span :class="['px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border', statusBadgeClass(ord.status)]">
-                      {{ statusLabel(ord.status) }}
-                    </span>
-                  </div>
-                  <p class="text-xs text-[#515154]">{{ ord.items }}</p>
-                  <p class="text-[11px] text-[#86868B]">{{ ord.payment }} • {{ ord.time }}</p>
+              <div class="space-y-2 text-xs">
+                <div class="flex items-center gap-2 font-bold text-[#1D1D1F]">
+                  <Users :size="14" class="text-[#6E6E73]" />
+                  <span>{{ selectedOrder.customer }}</span>
                 </div>
-
-                <div class="flex items-center gap-2.5 shrink-0">
-                  <span class="text-sm font-extrabold tabular-nums">{{ ord.total }} {{ store.currency }}</span>
-                  <select
-                    :value="ord.status"
-                    class="h-9 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] px-2.5 text-xs font-semibold cursor-pointer"
-                    @change="updateOrderStatus(ord.id, $event.target.value)"
-                  >
-                    <option value="pending">{{ t.statusPending }}</option>
-                    <option value="preparing">{{ t.statusPreparing }}</option>
-                    <option value="ready">{{ t.statusReady }}</option>
-                    <option value="delivered">{{ t.statusDelivered }}</option>
-                    <option value="cancelled">{{ t.statusCancelled }}</option>
-                  </select>
+                <div class="flex items-center gap-2 text-[#515154] font-mono">
+                  <Phone :size="14" class="text-[#6E6E73]" />
+                  <a :href="`tel:${selectedOrder.phone}`" class="hover:text-[#0066CC]">{{ selectedOrder.phone }}</a>
+                </div>
+                <div class="flex items-center gap-2 text-[#515154]">
+                  <MapPin :size="14" class="text-[#6E6E73]" />
+                  <span>{{ selectedOrder.address }}</span>
                 </div>
               </div>
-            </div>
+
+              <div class="border-t border-[#E5E5EA] pt-3 space-y-2 text-xs">
+                <div v-for="(line, i) in selectedOrder.lines" :key="i" class="flex justify-between">
+                  <span>{{ line.qty }}x {{ line.name }}</span>
+                  <span class="font-bold tabular-nums">{{ line.qty * line.price }} {{ store.currency }}</span>
+                </div>
+                <div class="pt-2 border-t border-[#E5E5EA] flex justify-between text-[#6E6E73]">
+                  <span>{{ t.subtotal }}</span>
+                  <span class="tabular-nums">{{ selectedOrder.subtotal }} {{ store.currency }}</span>
+                </div>
+                <div class="flex justify-between text-[#6E6E73]">
+                  <span>{{ t.shippingFee }}</span>
+                  <span class="tabular-nums">{{ selectedOrder.shipping }} {{ store.currency }}</span>
+                </div>
+                <div class="flex justify-between text-sm font-extrabold text-[#1D1D1F]">
+                  <span>{{ t.total }}</span>
+                  <span class="tabular-nums">{{ selectedOrder.total }} {{ store.currency }}</span>
+                </div>
+              </div>
+
+              <div class="pt-2 flex flex-wrap gap-2">
+                <button
+                  v-if="selectedOrder.status === 'pending'"
+                  type="button"
+                  class="flex-1 h-10 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+                  @click="updateOrderStatus(selectedOrder.id, 'preparing')"
+                >
+                  {{ t.markPreparing }}
+                </button>
+                <button
+                  v-if="selectedOrder.status === 'preparing'"
+                  type="button"
+                  class="flex-1 h-10 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+                  @click="updateOrderStatus(selectedOrder.id, 'ready')"
+                >
+                  {{ t.markReady }}
+                </button>
+                <button
+                  v-if="selectedOrder.status === 'ready'"
+                  type="button"
+                  class="flex-1 h-10 rounded-full bg-[#1D1D1F] hover:bg-black text-white text-xs font-bold cursor-pointer"
+                  @click="updateOrderStatus(selectedOrder.id, 'delivered')"
+                >
+                  {{ t.markDelivered }}
+                </button>
+              </div>
+            </aside>
           </div>
         </template>
 
-        <!-- PRODUCTS & MENU TAB -->
+        <!-- PRODUCTS TAB -->
         <template v-else-if="activeTab === 'products'">
           <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
             <div class="flex items-center justify-between gap-3 flex-wrap">
-              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navProducts }} ({{ filteredProducts.length }})</h2>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-base font-extrabold text-[#1D1D1F] mr-2">{{ t.navProducts }} ({{ filteredProducts.length }})</h2>
+                <button
+                  v-for="cat in productCategories"
+                  :key="cat"
+                  type="button"
+                  :class="[
+                    'h-8 px-3 rounded-full text-xs font-semibold cursor-pointer transition-colors',
+                    categoryFilter === cat ? 'bg-[#1D1D1F] text-white' : 'bg-[#F5F5F7] text-[#6E6E73] hover:text-[#1D1D1F]'
+                  ]"
+                  @click="categoryFilter = cat"
+                >
+                  {{ cat === 'all' ? t.filterAll : cat }}
+                </button>
+              </div>
               <button
                 type="button"
                 class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
-                @click="showAddProduct = !showAddProduct"
+                @click="openNewProductForm()"
               >
                 <Plus :size="14" />
                 <span>{{ t.addProduct }}</span>
               </button>
             </div>
 
+            <!-- Add / Edit Product Form -->
             <form
-              v-if="showAddProduct"
-              class="p-4 rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] grid grid-cols-1 sm:grid-cols-4 gap-3"
-              @submit.prevent="addProductItem"
+              v-if="showProductForm"
+              class="p-4 rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+              @submit.prevent="saveProductForm"
             >
-              <input
-                v-model="newProduct.name"
-                type="text"
-                required
-                :placeholder="t.productName"
-                class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs sm:col-span-2"
-              />
-              <input
-                v-model="newProduct.category"
-                type="text"
-                :placeholder="t.category"
-                class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
-              />
-              <div class="flex gap-2">
+              <div class="sm:col-span-2">
+                <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">{{ t.productName }} *</label>
                 <input
-                  v-model="newProduct.price"
+                  v-model="productForm.name"
+                  type="text"
+                  required
+                  class="w-full h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
+                />
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">{{ t.category }}</label>
+                <input
+                  v-model="productForm.category"
+                  type="text"
+                  class="w-full h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
+                />
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">{{ t.price }} ({{ store.currency }}) *</label>
+                <input
+                  v-model="productForm.price"
                   type="number"
                   min="1"
                   required
-                  :placeholder="t.price"
-                  class="flex-1 h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
+                  class="w-full h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono"
                 />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">{{ t.description }}</label>
+                <input
+                  v-model="productForm.description"
+                  type="text"
+                  class="w-full h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
+                />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">{{ t.imageUrl }}</label>
+                <input
+                  v-model="productForm.image"
+                  type="url"
+                  placeholder="https://..."
+                  class="w-full h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono"
+                />
+              </div>
+              <div class="sm:col-span-2 lg:col-span-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  class="h-9 px-4 rounded-full bg-white border border-[#E5E5EA] text-xs font-bold cursor-pointer"
+                  @click="showProductForm = false"
+                >
+                  {{ t.cancel }}
+                </button>
                 <button
                   type="submit"
-                  class="h-10 px-4 rounded-xl bg-[#0066CC] text-white text-xs font-bold cursor-pointer"
+                  class="h-9 px-5 rounded-full bg-[#0066CC] text-white text-xs font-bold cursor-pointer"
                 >
                   {{ t.save }}
                 </button>
@@ -600,14 +903,22 @@ const selectTab = (id) => {
               <div
                 v-for="p in filteredProducts"
                 :key="p.id"
-                class="p-4 flex items-center justify-between gap-3"
+                class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
               >
-                <div>
-                  <div class="text-xs font-bold text-[#1D1D1F]">{{ p.name }}</div>
-                  <div class="text-[11px] text-[#6E6E73]">{{ p.category }} • <span class="font-mono">{{ p.id }}</span></div>
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="h-11 w-11 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] overflow-hidden shrink-0 flex items-center justify-center text-[#86868B]">
+                    <img v-if="p.image" :src="p.image" :alt="p.name" class="h-full w-full object-cover" />
+                    <Package v-else :size="18" />
+                  </div>
+                  <div class="min-w-0">
+                    <div class="text-xs font-bold text-[#1D1D1F] truncate">{{ p.name }}</div>
+                    <div class="text-[11px] text-[#6E6E73] truncate">
+                      {{ p.category }} <span v-if="p.description">• {{ p.description }}</span>
+                    </div>
+                  </div>
                 </div>
-                <div class="flex items-center gap-2.5">
-                  <span class="text-xs font-extrabold tabular-nums">{{ p.price }} {{ store.currency }}</span>
+                <div class="flex items-center gap-2 shrink-0">
+                  <span class="text-xs font-extrabold tabular-nums mr-1">{{ p.price }} {{ store.currency }}</span>
                   <button
                     type="button"
                     :class="[
@@ -620,10 +931,17 @@ const selectTab = (id) => {
                   </button>
                   <button
                     type="button"
+                    class="h-8 w-8 rounded-lg bg-[#F5F5F7] hover:bg-[#ECECEF] text-[#1D1D1F] flex items-center justify-center cursor-pointer"
+                    @click="openEditProductForm(p)"
+                  >
+                    <Pencil :size="13" />
+                  </button>
+                  <button
+                    type="button"
                     class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center cursor-pointer"
                     @click="deleteProduct(p.id)"
                   >
-                    <Trash2 :size="14" />
+                    <Trash2 :size="13" />
                   </button>
                 </div>
               </div>
@@ -631,14 +949,33 @@ const selectTab = (id) => {
           </div>
         </template>
 
-        <!-- TELEGRAM BOT TAB -->
-        <template v-else-if="activeTab === 'telegram'">
-          <div class="max-w-2xl rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
-            <div class="space-y-1">
-              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.telegramTitle }}</h2>
-              <p class="text-xs text-[#6E6E73]">{{ t.telegramDesc }}</p>
+        <!-- CUSTOMERS TAB -->
+        <template v-else-if="activeTab === 'customers'">
+          <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
+            <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navCustomers }} ({{ customersList.length }})</h2>
+            <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
+              <div
+                v-for="c in customersList"
+                :key="c.phone || c.name"
+                class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+              >
+                <div>
+                  <div class="text-xs font-bold text-[#1D1D1F]">{{ c.name }}</div>
+                  <div class="text-[11px] text-[#6E6E73] font-mono">{{ c.phone }} • {{ c.address }}</div>
+                </div>
+                <div class="flex items-center gap-4 text-xs">
+                  <span class="text-[#6E6E73]">{{ t.ordersCount }}: <strong class="text-[#1D1D1F] tabular-nums">{{ c.ordersCount }}</strong></span>
+                  <span class="font-extrabold tabular-nums text-[#0066CC]">{{ c.totalSpent }} {{ store.currency }}</span>
+                </div>
+              </div>
             </div>
+          </div>
+        </template>
 
+        <!-- TELEGRAM TAB -->
+        <template v-else-if="activeTab === 'telegram'">
+          <div class="max-w-xl rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+            <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navTelegram }}</h2>
             <div class="space-y-4">
               <div>
                 <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.botToken }}</label>
@@ -659,25 +996,20 @@ const selectTab = (id) => {
                 />
               </div>
             </div>
-
             <button
               type="button"
-              class="h-11 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+              class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
               @click="showToast(t.savedToast)"
             >
-              {{ t.testBot }}
+              {{ t.save }}
             </button>
           </div>
         </template>
 
         <!-- STRIPE PAYMENTS TAB -->
         <template v-else-if="activeTab === 'payments'">
-          <div class="max-w-2xl rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
-            <div class="space-y-1">
-              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.stripeTitle }}</h2>
-              <p class="text-xs text-[#6E6E73]">{{ t.stripeDesc }}</p>
-            </div>
-
+          <div class="max-w-xl rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+            <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navPayments }}</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.stripeMode }}</label>
@@ -706,6 +1038,7 @@ const selectTab = (id) => {
                 <input
                   v-model="stripeConfig.publishableKey"
                   type="text"
+                  placeholder="pk_live_..."
                   class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
                 />
               </div>
@@ -718,11 +1051,19 @@ const selectTab = (id) => {
                   class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
                 />
               </div>
+              <div>
+                <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.freeShippingOver }}</label>
+                <input
+                  v-model="store.freeShippingOver"
+                  type="number"
+                  min="0"
+                  class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                />
+              </div>
             </div>
-
             <button
               type="button"
-              class="h-11 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+              class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
               @click="showToast(t.savedToast)"
             >
               {{ t.save }}
@@ -730,11 +1071,10 @@ const selectTab = (id) => {
           </div>
         </template>
 
-        <!-- SETTINGS & DOMAIN TAB -->
+        <!-- SETTINGS TAB -->
         <template v-else-if="activeTab === 'settings'">
-          <div class="max-w-2xl rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
-            <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.settingsTitle }}</h2>
-
+          <div class="max-w-xl rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+            <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navSettings }}</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.storeName }}</label>
@@ -779,10 +1119,9 @@ const selectTab = (id) => {
                 />
               </div>
             </div>
-
             <button
               type="button"
-              class="h-11 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+              class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
               @click="showToast(t.savedToast)"
             >
               {{ t.save }}
