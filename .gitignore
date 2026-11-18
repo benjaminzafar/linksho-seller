@@ -1,17 +1,10 @@
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-.env*
+# Nuxt dev/build outputs
+.nuxt
+.output
+.env
+.env.*
 !.env.example
+dist
+node_modules
+.wrangler
+.DS_Store
