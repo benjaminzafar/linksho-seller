@@ -39,16 +39,19 @@ import {
   Download,
   Check,
   XCircle,
+  RefreshCw,
+  Code2,
+  Bell,
 } from 'lucide-vue-next';
 import { SELLER_LANGUAGES, TRANSLATIONS } from '~/utils/i18n';
 
 const STORAGE_KEY = 'seller_pannel_v5';
 
 const lang = ref('en');
-const activeTab = ref('orders'); // 'orders' | 'menu' | 'delivery' | 'reports' | 'settings'
+const activeTab = ref('orders'); // 'orders' | 'menu' | 'reports' | 'settings'
 const mobileNavOpen = ref(false);
 const sidebarCollapsed = ref(false);
-const settingsSubTab = ref('profile'); // 'profile' | 'telegram' | 'smtp' | 'delivery_payments' | 'install'
+const settingsSubTab = ref('profile'); // 'profile' | 'delivery' | 'notifications' | 'stripe' | 'api' | 'install'
 const searchQuery = ref('');
 const orderFilter = ref('all');
 const orderTypeFilter = ref('all'); // 'all' | 'Delivery' | 'Pickup'
@@ -97,14 +100,19 @@ const showCouponForm = ref(false);
 const couponForm = ref({ code: '', percent: '' });
 
 const stripeConfig = ref({
-  mode: 'live',
+  enabled: true,
+  mode: 'test',
   publishableKey: '',
+  secretKey: '',
 });
+const showStripeSecret = ref(false);
 
 const telegramConfig = ref({
   botToken: '',
   chatId: '',
 });
+const testingTelegram = ref(false);
+const telegramTestFeedback = ref({ ok: false, msg: '' });
 
 const smtpConfig = ref({
   host: 'smtp.gmail.com',
@@ -113,8 +121,12 @@ const smtpConfig = ref({
   username: '',
   password: '',
   fromEmail: 'orders@stockholmbistro.se',
+  resendApiKey: '',
+  webhookUrl: '',
 });
 const showSmtpPass = ref(false);
+const workerSyncing = ref(false);
+const workerSyncMsg = ref('');
 
 const shippingZones = ref([
   {
@@ -328,6 +340,215 @@ const copyText = async (val) => {
   } catch {}
 };
 
+const workerBaseUrl = computed(() => String(installation.value.workerUrl || '').trim().replace(/\/+$/, ''));
+
+const workerFetch = async (path, opts = {}) => {
+  if (!workerBaseUrl.value || !installation.value.pinCode) return null;
+  const res = await fetch(`${workerBaseUrl.value}${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-seller-pin': installation.value.pinCode,
+      ...(opts.headers || {}),
+    },
+  });
+  return res.json().catch(() => null);
+};
+
+const syncSettingsToWorker = async (silent = false) => {
+  if (!workerBaseUrl.value || !installation.value.pinCode) {
+    if (!silent) showToast('Deploy or connect a Worker first');
+    return;
+  }
+  workerSyncing.value = true;
+  workerSyncMsg.value = '';
+  try {
+    const res = await workerFetch('/api/admin/settings', {
+      method: 'PUT',
+      body: JSON.stringify({
+        name: store.value.name,
+        isOpen: store.value.isOpen,
+        logoUrl: store.value.logoUrl,
+        bannerUrl: store.value.bannerUrl,
+        brandColor: store.value.brandColor,
+        currency: store.value.currency,
+        shippingFee: store.value.shippingFee,
+        freeShippingOver: store.value.freeShippingOver,
+        minOrder: restaurantConfig.value.minOrder,
+        maxDeliveryKm: restaurantConfig.value.maxDeliveryKm,
+        openingHours: restaurantConfig.value.openingHours,
+        deliveryEnabled: restaurantConfig.value.deliveryEnabled,
+        pickupEnabled: restaurantConfig.value.pickupEnabled,
+        deliveryZones: shippingZones.value,
+        categories: categories.value,
+        coupons: coupons.value,
+        telegram: telegramConfig.value,
+        smtp: smtpConfig.value,
+        stripe: stripeConfig.value,
+        phone: store.value.phone,
+        address: store.value.address,
+        instagram: store.value.instagram,
+        receiptNote: store.value.receiptNote,
+      }),
+    });
+    if (res?.ok) {
+      workerSyncMsg.value = 'Synced to Cloudflare Worker';
+      if (!silent) showToast('Synced to Worker');
+    } else if (!silent) {
+      workerSyncMsg.value = res?.error || 'Sync failed';
+    }
+  } catch (err) {
+    if (!silent) workerSyncMsg.value = err?.message || 'Sync failed';
+  } finally {
+    workerSyncing.value = false;
+  }
+};
+
+const pullFromWorker = async () => {
+  if (!workerBaseUrl.value || !installation.value.pinCode) return;
+  workerSyncing.value = true;
+  workerSyncMsg.value = '';
+  try {
+    const res = await workerFetch('/api/admin/overview');
+    if (res?.ok && Array.isArray(res.orders)) {
+      const mappedOrders = res.orders.map((o) => ({
+        id: o.id,
+        customer: o.customerName,
+        phone: o.customerPhone,
+        address: o.customerAddress || (o.deliveryType === 'pickup' ? 'Takeaway at restaurant' : ''),
+        deliveryType: o.deliveryType === 'pickup' ? 'Pickup' : 'Delivery',
+        lines: (o.items || []).map((i) => ({ name: i.title || i.name, qty: Number(i.qty) || 1, price: Number(i.unitPrice || i.price) || 0 })),
+        subtotal: Number(o.subtotal) || 0,
+        shipping: Number(o.shippingFee) || 0,
+        total: Number(o.totalAmount) || 0,
+        payment: o.paymentMethod === 'stripe' ? `Stripe (${o.paymentStatus || 'unpaid'})` : 'Pay on delivery/pickup',
+        status: o.status || 'pending',
+        prepMinutes: o.prepMinutes || null,
+        estimatedReadyAt: o.estimatedReadyAt || '',
+        time: o.createdAt ? new Date(o.createdAt).toLocaleString() : 'Live',
+        createdAt: o.createdAt || new Date().toISOString(),
+      }));
+      if (mappedOrders.length > 0) {
+        orders.value = mappedOrders;
+      }
+      workerSyncMsg.value = `Synced ${mappedOrders.length} live order(s)`;
+      showToast('Live orders synced');
+    } else {
+      workerSyncMsg.value = res?.error || 'Could not pull from Worker';
+    }
+  } catch (err) {
+    workerSyncMsg.value = err?.message || 'Worker connection failed';
+  } finally {
+    workerSyncing.value = false;
+  }
+};
+
+const sendTestTelegram = async () => {
+  telegramTestFeedback.value = { ok: false, msg: '' };
+  testingTelegram.value = true;
+  try {
+    let res;
+    if (workerBaseUrl.value && installation.value.pinCode) {
+      res = await workerFetch('/api/admin/test-telegram', {
+        method: 'POST',
+        body: JSON.stringify({
+          botToken: telegramConfig.value.botToken,
+          chatId: telegramConfig.value.chatId,
+        }),
+      });
+    } else {
+      res = await $fetch('/api/notifications/test-telegram', {
+        method: 'POST',
+        body: {
+          botToken: telegramConfig.value.botToken,
+          chatId: telegramConfig.value.chatId,
+          name: store.value.name,
+        },
+      });
+    }
+    if (res?.ok) {
+      telegramTestFeedback.value = { ok: true, msg: res.message || 'Test notification sent to Telegram!' };
+      showToast('Telegram test sent');
+    } else {
+      telegramTestFeedback.value = { ok: false, msg: res?.error || 'Telegram test failed.' };
+    }
+  } catch (err) {
+    telegramTestFeedback.value = { ok: false, msg: err?.data?.error || err?.message || 'Telegram test failed.' };
+  } finally {
+    testingTelegram.value = false;
+  }
+};
+
+const storefrontPreviewJson = computed(() =>
+  JSON.stringify(
+    {
+      ok: true,
+      store: {
+        name: store.value.name,
+        isOpen: store.value.isOpen,
+        currency: store.value.currency,
+        shippingFee: Number(store.value.shippingFee) || 0,
+        freeShippingOver: Number(store.value.freeShippingOver) || 0,
+        maxDeliveryKm: Number(restaurantConfig.value.maxDeliveryKm) || 10,
+        deliveryEnabled: restaurantConfig.value.deliveryEnabled,
+        pickupEnabled: restaurantConfig.value.pickupEnabled,
+        stripe: {
+          enabled: stripeConfig.value.enabled,
+          mode: stripeConfig.value.mode,
+          publishableKey: stripeConfig.value.publishableKey || 'pk_test_...',
+        },
+      },
+      categories: categories.value,
+      deliveryZones: shippingZones.value.map((z) => ({ id: z.id, name: z.name, price: z.price, estTime: z.estTime })),
+      products: products.value.filter((p) => p.available).map((p) => ({
+        id: p.id,
+        title: p.name,
+        category: p.category,
+        price: p.price,
+        description: p.description,
+      })),
+    },
+    null,
+    2
+  )
+);
+
+const frontendFetchSnippet = computed(() => {
+  const base = workerBaseUrl.value || 'https://your-worker.workers.dev';
+  const key = installation.value.apiKey || 'sk_live_YOUR_API_KEY';
+  return `// 1. Load Restaurant Menu & Stripe Publishable Key
+const res = await fetch('${base}/api/storefront?key=${key}');
+const { store, categories, products } = await res.json();
+
+// 2. Check Customer Delivery Location (optional lat/lng)
+const check = await fetch('${base}/api/delivery/check', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ apiKey: '${key}', lat: 59.33, lng: 18.06 })
+}).then(r => r.json());
+
+// 3. Checkout & Pay with Stripe
+const pay = await fetch('${base}/api/stripe/checkout', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    apiKey: '${key}',
+    customerName: 'Emma Lindqvist',
+    customerPhone: '+46 70 441 12 90',
+    customerAddress: 'Kungsgatan 18, Stockholm',
+    deliveryType: 'delivery',
+    items: [{ productId: products[0]?.id, qty: 1 }],
+    successUrl: window.location.origin + '/order-success',
+    cancelUrl: window.location.origin + '/cart'
+  })
+}).then(r => r.json());
+if (pay.checkoutUrl) window.location.href = pay.checkoutUrl;
+
+// 4. Track Order Acceptance & Estimated Preparation Time
+const status = await fetch('${base}/api/orders/status?id=' + pay.orderId + '&key=${key}').then(r => r.json());
+// status.order => { status: 'preparing', prepMinutes: 30, estimatedReadyAt: '19:45' }`;
+});
+
 const deployPanelToCloudflare = async () => {
   installError.value = '';
   installDeploying.value = true;
@@ -337,9 +558,29 @@ const deployPanelToCloudflare = async () => {
       body: {
         name: store.value.name,
         type: 'restaurant',
+        isOpen: store.value.isOpen,
         currency: store.value.currency,
         shippingFee: store.value.shippingFee,
+        freeShippingOver: store.value.freeShippingOver,
+        minOrder: restaurantConfig.value.minOrder,
+        maxDeliveryKm: restaurantConfig.value.maxDeliveryKm,
+        openingHours: restaurantConfig.value.openingHours,
+        deliveryEnabled: restaurantConfig.value.deliveryEnabled,
+        pickupEnabled: restaurantConfig.value.pickupEnabled,
+        deliveryZones: shippingZones.value,
+        categories: categories.value,
+        coupons: coupons.value,
+        telegram: telegramConfig.value,
+        smtp: smtpConfig.value,
+        stripe: stripeConfig.value,
+        products: products.value,
+        logoUrl: store.value.logoUrl,
+        bannerUrl: store.value.bannerUrl,
+        brandColor: store.value.brandColor,
         phone: store.value.phone,
+        address: store.value.address,
+        instagram: store.value.instagram,
+        receiptNote: store.value.receiptNote,
         companyNumber: store.value.orgNumber,
         email: cfDeployEmail.value.trim() || smtpConfig.value.fromEmail,
         cfToken: cfDeployToken.value.trim() || undefined,
@@ -350,8 +591,9 @@ const deployPanelToCloudflare = async () => {
       return;
     }
     installation.value = {
+      ...installation.value,
       installed: true,
-      workerUrl: res.workerUrl || '',
+      workerUrl: res.panelUrl || res.workerUrl || '',
       apiKey: res.apiKey || '',
       pinCode: res.pinCode || '',
       installedAt: new Date().toISOString(),
@@ -555,6 +797,10 @@ const acceptOrderWithPrep = (orderId, minutes) => {
       : o
   );
   acceptingOrderId.value = '';
+  workerFetch('/api/admin/orders', {
+    method: 'PUT',
+    body: JSON.stringify({ id: orderId, status: 'preparing', prepMinutes: mins, estimatedReadyAt: readyStr }),
+  }).catch(() => {});
   showToast(`${t.value.acceptOrder} • ${mins} min (${readyStr})`);
 };
 
@@ -563,6 +809,10 @@ const rejectOrder = (orderId) => {
     o.id === orderId ? { ...o, status: 'cancelled', prepMinutes: null, estimatedReadyAt: '' } : o
   );
   acceptingOrderId.value = '';
+  workerFetch('/api/admin/orders', {
+    method: 'PUT',
+    body: JSON.stringify({ id: orderId, status: 'cancelled' }),
+  }).catch(() => {});
   showToast(t.value.statusRejected || 'Rejected');
 };
 
@@ -663,7 +913,7 @@ const exportSalesToExcel = () => {
 
 const openNewProductForm = () => {
   editingProductId.value = '';
-  productForm.value = { name: '', category: 'Main Course', price: '', description: '', image: '' };
+  productForm.value = { name: '', category: categories.value[0] || 'Main Course', price: '', description: '', image: '' };
   showProductForm.value = true;
 };
 
@@ -684,32 +934,38 @@ const saveProductForm = () => {
   const numPrice = Number(productForm.value.price);
   if (!cleanName || Number.isNaN(numPrice) || numPrice <= 0) return;
 
+  let savedItem = null;
   if (editingProductId.value) {
-    products.value = products.value.map((p) =>
-      p.id === editingProductId.value
-        ? {
-            ...p,
-            name: cleanName,
-            category: productForm.value.category.trim() || 'General',
-            price: numPrice,
-            description: productForm.value.description.trim(),
-            image: productForm.value.image.trim(),
-          }
-        : p
-    );
-  } else {
-    products.value = [
-      {
-        id: `PRD-${Math.floor(100 + Math.random() * 900)}`,
+    products.value = products.value.map((p) => {
+      if (p.id !== editingProductId.value) return p;
+      savedItem = {
+        ...p,
         name: cleanName,
         category: productForm.value.category.trim() || 'General',
         price: numPrice,
         description: productForm.value.description.trim(),
         image: productForm.value.image.trim(),
-        available: true,
-      },
-      ...products.value,
-    ];
+      };
+      return savedItem;
+    });
+  } else {
+    savedItem = {
+      id: `PRD-${Math.floor(100 + Math.random() * 900)}`,
+      name: cleanName,
+      category: productForm.value.category.trim() || 'General',
+      price: numPrice,
+      description: productForm.value.description.trim(),
+      image: productForm.value.image.trim(),
+      available: true,
+    };
+    products.value = [savedItem, ...products.value];
+  }
+
+  if (savedItem) {
+    workerFetch('/api/admin/products', {
+      method: 'POST',
+      body: JSON.stringify({ ...savedItem, title: savedItem.name }),
+    }).catch(() => {});
   }
 
   showProductForm.value = false;
@@ -718,12 +974,24 @@ const saveProductForm = () => {
 };
 
 const toggleProductAvailability = (id) => {
-  products.value = products.value.map((p) => (p.id === id ? { ...p, available: !p.available } : p));
+  let updated = null;
+  products.value = products.value.map((p) => {
+    if (p.id !== id) return p;
+    updated = { ...p, available: !p.available };
+    return updated;
+  });
+  if (updated) {
+    workerFetch('/api/admin/products', {
+      method: 'POST',
+      body: JSON.stringify({ ...updated, title: updated.name }),
+    }).catch(() => {});
+  }
   showToast(t.value.savedToast);
 };
 
 const deleteProduct = (id) => {
   products.value = products.value.filter((p) => p.id !== id);
+  workerFetch(`/api/admin/products?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
   showToast(t.value.savedToast);
 };
 
@@ -983,7 +1251,7 @@ const selectTab = (id) => {
             'w-full rounded-2xl bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] py-2.5 flex items-center text-xs font-semibold transition-colors cursor-pointer',
             sidebarCollapsed ? 'lg:justify-center lg:px-0 px-3.5 justify-between' : 'px-3.5 justify-between'
           ]"
-          @click="store.isOpen = !store.isOpen; showToast(t.savedToast)"
+          @click="store.isOpen = !store.isOpen; syncSettingsToWorker(true); showToast(t.savedToast)"
         >
           <span class="flex items-center gap-2">
             <span :class="['h-2 w-2 rounded-full shrink-0', store.isOpen ? 'bg-emerald-500' : 'bg-rose-500']" />
@@ -1134,7 +1402,17 @@ const selectTab = (id) => {
               <h1 class="text-xl font-extrabold text-[#1D1D1F]">{{ store.name }} — {{ t.navOrders }}</h1>
               <p class="text-xs text-[#6E6E73]">{{ store.address }}</p>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
+              <button
+                v-if="workerBaseUrl && installation.pinCode"
+                type="button"
+                :disabled="workerSyncing"
+                class="h-8 px-3 rounded-full bg-white hover:bg-[#F5F5F7] border border-[#E5E5EA] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                @click="pullFromWorker"
+              >
+                <RefreshCw :size="12" :class="workerSyncing ? 'animate-spin' : ''" />
+                <span>Sync Live Orders</span>
+              </button>
               <span class="px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">
                 {{ orderCountsByStatus.pending }} {{ t.statusPending }}
               </span>
@@ -1186,6 +1464,7 @@ const selectTab = (id) => {
                   :key="ord.id"
                   :class="[
                     'p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer transition-colors',
+                    ord.status === 'pending' ? 'border-l-4 border-l-amber-500' : '',
                     selectedOrderId === ord.id ? 'bg-[#0066CC]/[0.05]' : 'hover:bg-[#F5F5F7]/70'
                   ]"
                   @click="selectedOrderId = ord.id"
@@ -1541,6 +1820,9 @@ const selectTab = (id) => {
                   </button>
                 </div>
               </div>
+              <div v-if="filteredProducts.length === 0" class="p-8 text-center text-xs text-[#6E6E73]">
+                No menu items in this category yet. Click "{{ t.addProduct }}" to add one.
+              </div>
             </div>
           </div>
           </div>
@@ -1862,6 +2144,16 @@ const selectTab = (id) => {
                 type="button"
                 :class="[
                   'h-9 px-3.5 rounded-xl text-xs font-bold cursor-pointer transition-colors',
+                  settingsSubTab === 'api' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                ]"
+                @click="settingsSubTab = 'api'"
+              >
+                REST API
+              </button>
+              <button
+                type="button"
+                :class="[
+                  'h-9 px-3.5 rounded-xl text-xs font-bold cursor-pointer transition-colors',
                   settingsSubTab === 'install' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
                 ]"
                 @click="settingsSubTab = 'install'"
@@ -1911,7 +2203,7 @@ const selectTab = (id) => {
                 <button
                   type="button"
                   class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-                  @click="renderMapZones(); showToast(t.savedToast)"
+                  @click="renderMapZones(); syncSettingsToWorker(true); showToast(t.savedToast)"
                 >
                   {{ t.save }}
                 </button>
@@ -1974,16 +2266,30 @@ const selectTab = (id) => {
                       </button>
                     </div>
                   </div>
-                </div>
-                <div v-if="filteredOrders.length === 0" class="p-8 text-center text-xs text-[#6E6E73]">
-                  No orders match the current filter.
+                  <div v-if="shippingZones.length === 0" class="p-6 text-center text-xs text-[#6E6E73]">
+                    No delivery zones drawn yet. Click 3+ points on the map above to draw a zone.
+                  </div>
                 </div>
               </div>
             </div>
 
             <!-- SUB-TAB: Telegram -->
             <div v-if="settingsSubTab === 'telegram'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
-              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navTelegram }}</h2>
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navTelegram }}</h2>
+                  <p class="text-xs text-[#6E6E73] mt-0.5">Instant Telegram order alerts run directly inside your Cloudflare Worker.</p>
+                </div>
+                <button
+                  type="button"
+                  :disabled="testingTelegram"
+                  class="h-9 px-4 rounded-full bg-[#1D1D1F] hover:bg-black disabled:opacity-60 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                  @click="sendTestTelegram"
+                >
+                  <Bell :size="13" />
+                  <span>{{ testingTelegram ? 'Sending...' : 'Send Test Notification' }}</span>
+                </button>
+              </div>
               <div class="space-y-4">
                 <div>
                   <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.botToken }}</label>
@@ -2004,10 +2310,19 @@ const selectTab = (id) => {
                   />
                 </div>
               </div>
+              <div
+                v-if="telegramTestFeedback.msg"
+                :class="[
+                  'p-3 rounded-xl border text-xs font-semibold',
+                  telegramTestFeedback.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-700'
+                ]"
+              >
+                {{ telegramTestFeedback.msg }}
+              </div>
               <button
                 type="button"
                 class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-                @click="showToast(t.savedToast)"
+                @click="syncSettingsToWorker(true); showToast(t.savedToast)"
               >
                 {{ t.save }}
               </button>
@@ -2015,7 +2330,16 @@ const selectTab = (id) => {
 
             <!-- SUB-TAB: Stripe Payments -->
             <div v-if="settingsSubTab === 'payments'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
-              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navPayments }}</h2>
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navPayments }}</h2>
+                  <p class="text-xs text-[#6E6E73] mt-0.5">Handles Stripe Checkout sessions &amp; PaymentIntents directly in the Worker API.</p>
+                </div>
+                <label class="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#F5F5F7] border border-[#E5E5EA] text-xs font-bold cursor-pointer">
+                  <input v-model="stripeConfig.enabled" type="checkbox" class="accent-[#0066CC]" />
+                  <span>Enable Stripe</span>
+                </label>
+              </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.stripeMode }}</label>
@@ -2040,22 +2364,148 @@ const selectTab = (id) => {
                   </select>
                 </div>
                 <div class="sm:col-span-2">
-                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.publishableKey }}</label>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.publishableKey }} (Public Frontend)</label>
                   <input
                     v-model="stripeConfig.publishableKey"
                     type="text"
-                    placeholder="pk_live_..."
+                    placeholder="pk_test_... / pk_live_..."
                     class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
                   />
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">Stripe Secret Key (Stored privately in Worker D1)</label>
+                  <div class="relative">
+                    <input
+                      v-model="stripeConfig.secretKey"
+                      :type="showStripeSecret ? 'text' : 'password'"
+                      placeholder="sk_test_... / sk_live_..."
+                      class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] pl-3.5 pr-9 text-xs font-mono"
+                    />
+                    <button
+                      type="button"
+                      class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6E6E73] hover:text-[#1D1D1F] cursor-pointer"
+                      @click="showStripeSecret = !showStripeSecret"
+                    >
+                      <EyeOff v-if="showStripeSecret" :size="15" />
+                      <Eye v-else :size="15" />
+                    </button>
+                  </div>
                 </div>
               </div>
               <button
                 type="button"
                 class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-                @click="showToast(t.savedToast)"
+                @click="syncSettingsToWorker(true); showToast(t.savedToast)"
               >
                 {{ t.save }}
               </button>
+            </div>
+
+            <!-- SUB-TAB: REST API & Frontend Selling -->
+            <div v-if="settingsSubTab === 'api'" class="space-y-5">
+              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 class="text-base font-extrabold text-[#1D1D1F] flex items-center gap-2">
+                      <Code2 :size="17" class="text-[#0066CC]" />
+                      <span>Frontend REST API &amp; Stripe Selling</span>
+                    </h2>
+                    <p class="text-xs text-[#6E6E73] mt-0.5">Connect your customer website to display your menu, check delivery area, accept Stripe payments, and show order prep times.</p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      :disabled="workerSyncing"
+                      class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] disabled:opacity-60 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                      @click="syncSettingsToWorker(false)"
+                    >
+                      <RefreshCw :size="12" :class="workerSyncing ? 'animate-spin' : ''" />
+                      <span>Sync Settings to Worker</span>
+                    </button>
+                    <button
+                      type="button"
+                      :disabled="workerSyncing || !workerBaseUrl"
+                      class="h-9 px-4 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] disabled:opacity-50 text-xs font-bold cursor-pointer"
+                      @click="pullFromWorker"
+                    >
+                      Pull Live Orders
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="workerSyncMsg" class="p-3 rounded-xl bg-blue-50 border border-blue-200 text-[#0066CC] text-xs font-semibold">
+                  {{ workerSyncMsg }}
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">Worker URL</label>
+                    <input v-model="installation.workerUrl" type="url" placeholder="https://linksho-site-....workers.dev" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-mono" />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">Public API Key</label>
+                    <input v-model="installation.apiKey" type="text" placeholder="sk_live_..." class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-mono" />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">Admin Seller PIN</label>
+                    <input v-model="installation.pinCode" type="password" placeholder="PIN" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-mono" />
+                  </div>
+                </div>
+
+                <!-- Copyable Endpoints -->
+                <div class="space-y-2.5 pt-2">
+                  <div
+                    v-for="ep in [
+                      { method: 'GET', label: 'Show Menu, Categories, Delivery Zones & Stripe Key on Frontend', url: `${workerBaseUrl || 'https://your-worker.workers.dev'}/api/storefront?key=${installation.apiKey || 'YOUR_API_KEY'}` },
+                      { method: 'POST', label: 'Verify Delivery Area / Max Distance (lat, lng)', url: `${workerBaseUrl || 'https://your-worker.workers.dev'}/api/delivery/check` },
+                      { method: 'POST', label: 'Place Order (Pay on Delivery / Takeaway + Telegram Alert)', url: `${workerBaseUrl || 'https://your-worker.workers.dev'}/api/orders` },
+                      { method: 'POST', label: 'Create Stripe Checkout Session & Redirect Customer to Pay', url: `${workerBaseUrl || 'https://your-worker.workers.dev'}/api/stripe/checkout` },
+                      { method: 'POST', label: 'Create Stripe PaymentIntent (Custom Elements)', url: `${workerBaseUrl || 'https://your-worker.workers.dev'}/api/stripe/payment-intent` },
+                      { method: 'POST', label: 'Verify Stripe Payment & Send Paid Telegram Alert', url: `${workerBaseUrl || 'https://your-worker.workers.dev'}/api/stripe/verify` },
+                      { method: 'GET', label: 'Show Order Status & Preparation Time on Customer Website', url: `${workerBaseUrl || 'https://your-worker.workers.dev'}/api/orders/status?id=ORD-XXXX&key=${installation.apiKey || 'YOUR_API_KEY'}` },
+                    ]"
+                    :key="ep.url"
+                    class="p-3 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                  >
+                    <div class="min-w-0 space-y-0.5">
+                      <div class="flex items-center gap-2">
+                        <span :class="['px-2 py-0.5 rounded-md text-[10px] font-extrabold font-mono', ep.method === 'GET' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-[#0066CC]']">{{ ep.method }}</span>
+                        <span class="text-xs font-bold text-[#1D1D1F]">{{ ep.label }}</span>
+                      </div>
+                      <div class="text-[11px] font-mono text-[#6E6E73] truncate">{{ ep.url }}</div>
+                    </div>
+                    <button type="button" class="h-8 px-3 rounded-lg bg-white hover:bg-[#ECECEF] border border-[#D2D2D7] text-[11px] font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer" @click="copyText(ep.url)">
+                      <Copy :size="12" />
+                      <span>Copy</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Frontend Integration Code & Live JSON Preview -->
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-3">
+                  <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-extrabold text-[#1D1D1F]">Frontend JavaScript Example</h3>
+                    <button type="button" class="h-8 px-3 rounded-lg bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer" @click="copyText(frontendFetchSnippet)">
+                      <Copy :size="12" />
+                      <span>Copy Code</span>
+                    </button>
+                  </div>
+                  <pre class="p-3.5 rounded-xl bg-[#1D1D1F] text-[#F5F5F7] text-[11px] font-mono overflow-x-auto leading-relaxed max-h-72">{{ frontendFetchSnippet }}</pre>
+                </div>
+
+                <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-3">
+                  <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-extrabold text-[#1D1D1F]">Live /api/storefront JSON Preview</h3>
+                    <button type="button" class="h-8 px-3 rounded-lg bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer" @click="copyText(storefrontPreviewJson)">
+                      <Copy :size="12" />
+                      <span>Copy JSON</span>
+                    </button>
+                  </div>
+                  <pre class="p-3.5 rounded-xl bg-[#1D1D1F] text-emerald-300 text-[11px] font-mono overflow-x-auto leading-relaxed max-h-72">{{ storefrontPreviewJson }}</pre>
+                </div>
+              </div>
             </div>
 
             <!-- SUB-TAB 1: Store Profile -->
@@ -2132,7 +2582,7 @@ const selectTab = (id) => {
               <button
                 type="button"
                 class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-                @click="showToast(t.savedToast)"
+                @click="syncSettingsToWorker(true); showToast(t.savedToast)"
               >
                 {{ t.save }}
               </button>
@@ -2263,7 +2713,7 @@ const selectTab = (id) => {
               <button
                 type="button"
                 class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-                @click="showToast(t.savedToast)"
+                @click="syncSettingsToWorker(true); showToast(t.savedToast)"
               >
                 {{ t.save }}
               </button>
@@ -2314,7 +2764,7 @@ const selectTab = (id) => {
               <button
                 type="button"
                 class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-                @click="showToast(t.savedToast)"
+                @click="syncSettingsToWorker(true); showToast(t.savedToast)"
               >
                 {{ t.save }}
               </button>
@@ -2389,11 +2839,29 @@ const selectTab = (id) => {
                     class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
                   />
                 </div>
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">Resend API Key (Optional — sends emails directly from Worker)</label>
+                  <input
+                    v-model="smtpConfig.resendApiKey"
+                    type="password"
+                    placeholder="re_..."
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">Email Webhook URL (Optional)</label>
+                  <input
+                    v-model="smtpConfig.webhookUrl"
+                    type="url"
+                    placeholder="https://..."
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
               </div>
               <button
                 type="button"
                 class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-                @click="showToast(t.savedToast)"
+                @click="syncSettingsToWorker(true); showToast(t.savedToast)"
               >
                 {{ t.save }}
               </button>
@@ -2531,11 +2999,11 @@ const selectTab = (id) => {
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.publishableKey }} (Stripe)</label>
-                  <input v-model="stripeConfig.publishableKey" type="text" placeholder="pk_live_..." class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono" />
+                  <input v-model="stripeConfig.publishableKey" type="text" placeholder="pk_test_... / pk_live_..." class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono" />
                 </div>
                 <div>
-                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.fromEmail }} (SMTP)</label>
-                  <input v-model="smtpConfig.fromEmail" type="email" placeholder="orders@restaurant.se" class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono" />
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">Stripe Secret Key</label>
+                  <input v-model="stripeConfig.secretKey" type="password" placeholder="sk_test_... / sk_live_..." class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono" />
                 </div>
                 <div>
                   <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.botToken }} (Telegram)</label>
@@ -2544,6 +3012,10 @@ const selectTab = (id) => {
                 <div>
                   <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.chatId }} (Telegram)</label>
                   <input v-model="telegramConfig.chatId" type="text" placeholder="-1001234567890" class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono" />
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.fromEmail }} (SMTP)</label>
+                  <input v-model="smtpConfig.fromEmail" type="email" placeholder="orders@restaurant.se" class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono" />
                 </div>
               </div>
               <div class="flex justify-between pt-2">
@@ -2608,6 +3080,16 @@ const selectTab = (id) => {
                         <div class="font-mono font-semibold text-[#1D1D1F] truncate mt-0.5">{{ installation.pinCode }}</div>
                       </div>
                       <button type="button" class="text-[#0066CC] cursor-pointer shrink-0" @click="copyText(installation.pinCode)"><Copy :size="14" /></button>
+                    </div>
+                  </div>
+                  <div class="p-2.5 rounded-xl bg-white border border-emerald-200 flex items-center justify-between gap-2 text-xs">
+                    <div class="min-w-0">
+                      <div class="text-[10px] font-bold text-[#6E6E73] uppercase">Storefront REST API (Show Menu &amp; Sell)</div>
+                      <div class="font-mono font-semibold text-[#1D1D1F] truncate mt-0.5">{{ workerBaseUrl }}/api/storefront?key={{ installation.apiKey }}</div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <button type="button" class="h-8 px-3 rounded-lg bg-[#F5F5F7] text-[#0066CC] font-bold cursor-pointer" @click="copyText(`${workerBaseUrl}/api/storefront?key=${installation.apiKey}`)">Copy API</button>
+                      <button type="button" class="h-8 px-3 rounded-lg bg-[#0066CC] text-white font-bold cursor-pointer" @click="settingsSubTab = 'api'">Open REST API</button>
                     </div>
                   </div>
                 </div>

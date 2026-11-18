@@ -109,14 +109,38 @@ export default defineEventHandler(async (event) => {
       apiKey,
       name: storeName,
       type: storeType,
+      isOpen: body.isOpen !== false,
       currency,
       shippingFee,
-      freeShippingOver: 0,
-      stripe: { enabled: false, mode: 'test', publishableKey: '' },
+      freeShippingOver: Math.max(0, Number(body.freeShippingOver) || 0),
+      minOrder: Math.max(0, Number(body.minOrder) || 0),
+      maxDeliveryKm: Math.max(1, Number(body.maxDeliveryKm) || 10),
+      openingHours: String(body.openingHours || 'Mon-Sun 11:00 - 22:00'),
+      deliveryEnabled: body.deliveryEnabled !== false,
+      pickupEnabled: body.pickupEnabled !== false,
+      deliveryZones: Array.isArray(body.deliveryZones) ? body.deliveryZones : [],
+      categories: Array.isArray(body.categories) ? body.categories : ['Main Course', 'Sides', 'Desserts', 'Drinks'],
+      coupons: Array.isArray(body.coupons) ? body.coupons : [],
+      telegram: {
+        botToken: String(body.telegram?.botToken || '').trim(),
+        chatId: String(body.telegram?.chatId || '').trim(),
+      },
+      smtp: body.smtp || {},
+      stripe: {
+        enabled: Boolean(body.stripe?.enabled),
+        mode: body.stripe?.mode === 'live' ? 'live' : 'test',
+        publishableKey: String(body.stripe?.publishableKey || '').trim(),
+        secretKey: String(body.stripe?.secretKey || '').trim(),
+      },
+      logoUrl: String(body.logoUrl || '').slice(0, 65000),
+      bannerUrl: String(body.bannerUrl || '').slice(0, 65000),
+      brandColor: String(body.brandColor || '#0066CC'),
       phone,
       companyNumber,
       email,
-      address: '',
+      address: String(body.address || '').trim(),
+      instagram: String(body.instagram || '').trim(),
+      receiptNote: String(body.receiptNote || '').trim(),
       description: '',
       createdAt: new Date().toISOString(),
     };
@@ -147,6 +171,29 @@ export default defineEventHandler(async (event) => {
         params: ['main', JSON.stringify(initialConfig)],
       }),
     });
+
+    if (Array.isArray(body.products) && body.products.length > 0) {
+      const nowIso = new Date().toISOString();
+      for (const p of body.products.slice(0, 100)) {
+        await cfFetch(`/accounts/${accountId}/d1/database/${dbId}/query`, cfToken, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sql: 'INSERT OR REPLACE INTO products (id, title, category, price, image, description, available, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            params: [
+              String(p.id || `PRD-${randomHex(3)}`),
+              String(p.name || p.title || 'Item').trim(),
+              String(p.category || 'Main Course').trim(),
+              Number(p.price) || 0,
+              String(p.image || '').slice(0, 65000),
+              String(p.description || '').trim(),
+              p.available === false ? 0 : 1,
+              nowIso,
+            ],
+          }),
+        });
+      }
+    }
 
     // 5. Upload Self-Contained Worker Script + D1 Binding
     const workerCode = buildSellerWorkerScript();
@@ -194,6 +241,7 @@ export default defineEventHandler(async (event) => {
     return {
       ok: true,
       panelUrl,
+      workerUrl: panelUrl,
       storefrontApiUrl,
       storeId,
       pinCode,
