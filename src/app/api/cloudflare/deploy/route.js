@@ -49,6 +49,8 @@ export async function POST(req) {
     const currency = ['SEK', 'NOK', 'DKK', 'EUR'].includes(body.currency) ? body.currency : 'SEK';
     const shippingFee = Math.max(0, Number(body.shippingFee) || 0);
     const phone = String(body.phone || '').trim();
+    const companyNumber = String(body.companyNumber || '').trim();
+    const email = String(body.email || '').trim();
 
     if (!storeName) {
       return jsonRes({ ok: false, error: 'نام فروشگاه یا رستوران الزامی است.' }, 400);
@@ -117,6 +119,8 @@ export async function POST(req) {
       freeShippingOver: 0,
       stripe: { enabled: false, mode: 'test', publishableKey: '' },
       phone,
+      companyNumber,
+      email,
       address: '',
       description: '',
       createdAt: new Date().toISOString(),
@@ -207,6 +211,9 @@ export async function POST(req) {
       name: storeName,
       type: storeType,
       currency,
+      phone,
+      companyNumber,
+      email,
       createdAt: initialConfig.createdAt,
     });
   } catch (err) {
