@@ -1,5 +1,5 @@
-import SellerDashboard from '@/components/SellerDashboard';
+import CloudflareDeployPortal from '@/components/CloudflareDeployPortal';
 
 export default function HomePage() {
-  return <SellerDashboard />;
+  return <CloudflareDeployPortal />;
 }
