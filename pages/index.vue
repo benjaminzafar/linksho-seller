@@ -1051,8 +1051,8 @@ const initDeliveryMap = async () => {
   renderMapZones();
 };
 
-watch(activeTab, (tab) => {
-  if (tab === 'delivery') {
+watch([activeTab, settingsSubTab], ([tab, sub]) => {
+  if (tab === 'settings' && sub === 'delivery') {
     setTimeout(initDeliveryMap, 80);
   }
 });
@@ -1148,7 +1148,6 @@ const deleteCoupon = (id) => {
 const primaryNav = computed(() => [
   { id: 'orders', label: t.value.navOrders, icon: ShoppingBag, badge: activeOrdersCount.value },
   { id: 'menu', label: t.value.navMenu, icon: Utensils, badge: products.value.length },
-  { id: 'delivery', label: t.value.navDelivery, icon: Truck },
   { id: 'reports', label: t.value.navReports, icon: BarChart3 },
 ]);
 
@@ -1510,6 +1509,9 @@ const selectTab = (id) => {
                     </div>
                   </div>
                 </div>
+                <div v-if="filteredOrders.length === 0" class="p-8 text-center text-xs text-[#6E6E73]">
+                  No orders match the current filter.
+                </div>
               </div>
             </div>
 
@@ -1750,7 +1752,7 @@ const selectTab = (id) => {
                 <div class="flex items-center gap-3 min-w-0">
                   <div class="h-11 w-11 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] overflow-hidden shrink-0 flex items-center justify-center text-[#86868B]">
                     <img v-if="p.image" :src="p.image" :alt="p.name" class="h-full w-full object-cover" />
-                    <Package v-else :size="18" />
+                    <Utensils v-else :size="16" />
                   </div>
                   <div class="min-w-0">
                     <div class="text-xs font-bold text-[#1D1D1F] truncate">{{ p.name }}</div>
@@ -1862,17 +1864,25 @@ const selectTab = (id) => {
                   <div
                     v-for="(item, idx) in bestSellingFoods"
                     :key="item.name"
-                    class="px-4 py-3 flex items-center justify-between gap-2 text-xs"
+                    class="px-4 py-3 space-y-1.5 text-xs"
                   >
-                    <div class="flex items-center gap-2.5 min-w-0">
-                      <span class="h-6 w-6 rounded-full bg-[#F5F5F7] text-[#1D1D1F] font-extrabold text-[11px] flex items-center justify-center shrink-0">
-                        {{ idx + 1 }}
-                      </span>
-                      <span class="font-bold text-[#1D1D1F] truncate">{{ item.name }}</span>
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="flex items-center gap-2.5 min-w-0">
+                        <span class="h-6 w-6 rounded-full bg-[#F5F5F7] text-[#1D1D1F] font-extrabold text-[11px] flex items-center justify-center shrink-0">
+                          {{ idx + 1 }}
+                        </span>
+                        <span class="font-bold text-[#1D1D1F] truncate">{{ item.name }}</span>
+                      </div>
+                      <div class="flex items-center gap-3 shrink-0">
+                        <span class="text-[#6E6E73] font-semibold">{{ item.qty }} {{ t.unitsSold }}</span>
+                        <span class="font-extrabold tabular-nums text-[#0066CC]">{{ item.revenue }} {{ store.currency }}</span>
+                      </div>
                     </div>
-                    <div class="flex items-center gap-3 shrink-0">
-                      <span class="text-[#6E6E73] font-semibold">{{ item.qty }} {{ t.unitsSold }}</span>
-                      <span class="font-extrabold tabular-nums text-[#0066CC]">{{ item.revenue }} {{ store.currency }}</span>
+                    <div class="h-1.5 w-full rounded-full bg-[#F0F0F2] overflow-hidden">
+                      <div
+                        class="h-full rounded-full bg-[#0066CC]"
+                        :style="{ width: `${Math.max(8, Math.round((item.qty / (bestSellingFoods[0]?.qty || 1)) * 100))}%` }"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1896,6 +1906,9 @@ const selectTab = (id) => {
                       <span class="font-extrabold tabular-nums text-[#0066CC]">{{ c.totalSpent }} {{ store.currency }}</span>
                     </div>
                   </div>
+                </div>
+                <div v-if="filteredOrders.length === 0" class="p-8 text-center text-xs text-[#6E6E73]">
+                  No orders match the current filter.
                 </div>
               </div>
             </div>
@@ -2008,152 +2021,6 @@ const selectTab = (id) => {
           </div>
         </template>
 
-        <!-- 3. DELIVERY SETTINGS TAB -->
-        <template v-else-if="activeTab === 'delivery'">
-          <div class="space-y-5">
-            <!-- Max Distance, Delivery Fee & Free Threshold -->
-            <div class="max-w-3xl rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-4">
-              <div>
-                <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navDelivery }}</h2>
-                <p class="text-xs text-[#6E6E73] mt-0.5">{{ t.deliveryAreaHint }}</p>
-              </div>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.maxDeliveryDistance }}</label>
-                  <input
-                    v-model="restaurantConfig.maxDeliveryKm"
-                    type="number"
-                    min="1"
-                    max="100"
-                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
-                    @change="renderMapZones()"
-                  />
-                </div>
-                <div>
-                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.shippingFee }} ({{ store.currency }})</label>
-                  <input
-                    v-model="store.shippingFee"
-                    type="number"
-                    min="0"
-                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
-                  />
-                </div>
-                <div>
-                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.freeShippingOver }} ({{ store.currency }})</label>
-                  <input
-                    v-model="store.freeShippingOver"
-                    type="number"
-                    min="0"
-                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
-                  />
-                </div>
-              </div>
-              <button
-                type="button"
-                class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-                @click="renderMapZones(); showToast(t.savedToast)"
-              >
-                {{ t.save }}
-              </button>
-            </div>
-
-            <!-- RESTAURANT: Free OpenStreetMap Interactive Delivery Zone Drawer -->
-            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
-              <div class="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.drawZoneMap }}</h3>
-                  <p class="text-xs text-[#6E6E73] mt-0.5">{{ t.clickMapPoints }}</p>
-                </div>
-                <div class="flex items-center gap-2">
-                  <button
-                    v-if="draftPoints.length > 0"
-                    type="button"
-                    class="h-9 px-3.5 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-xs font-semibold cursor-pointer"
-                    @click="clearDraftPoints"
-                  >
-                    {{ t.clearPoints }} ({{ draftPoints.length }})
-                  </button>
-                  <button
-                    type="button"
-                    class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
-                    @click="showZoneForm = !showZoneForm"
-                  >
-                    <Plus :size="14" />
-                    <span>{{ t.addZone }}</span>
-                  </button>
-                </div>
-              </div>
-
-              <!-- OpenStreetMap Canvas -->
-              <div ref="mapContainer" class="w-full h-72 sm:h-80 rounded-2xl border border-[#E5E5EA] overflow-hidden z-10 bg-[#ECECEF]" />
-
-              <form
-                v-if="showZoneForm"
-                class="p-4 rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"
-                @submit.prevent="addShippingZone"
-              >
-                <input
-                  v-model="zoneForm.name"
-                  type="text"
-                  required
-                  :placeholder="t.zoneName"
-                  class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
-                />
-                <input
-                  v-model="zoneForm.price"
-                  type="number"
-                  min="0"
-                  required
-                  :placeholder="`${t.zonePrice} (${store.currency})`"
-                  class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono"
-                />
-                <input
-                  v-model="zoneForm.estTime"
-                  type="text"
-                  :placeholder="t.estTime"
-                  class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
-                />
-                <input
-                  v-model="zoneForm.color"
-                  type="color"
-                  class="h-10 w-full rounded-xl border border-[#D2D2D7] bg-white px-1 cursor-pointer"
-                />
-                <button type="submit" class="h-10 px-4 rounded-xl bg-[#0066CC] text-white text-xs font-bold cursor-pointer">
-                  {{ t.save }}
-                </button>
-              </form>
-
-              <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
-                <div
-                  v-for="z in shippingZones"
-                  :key="z.id"
-                  class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                >
-                  <div class="flex items-center gap-3">
-                    <span class="h-3.5 w-3.5 rounded-full shrink-0" :style="{ backgroundColor: z.color || '#0066CC' }" />
-                    <div>
-                      <div class="text-xs font-bold text-[#1D1D1F]">{{ z.name }}</div>
-                      <div class="text-[11px] text-[#6E6E73]">
-                        {{ z.points?.length ? `${z.points.length} pts` : z.range }} • {{ z.estTime }}
-                      </div>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <span class="text-xs font-extrabold tabular-nums text-[#0066CC]">{{ z.price }} {{ store.currency }}</span>
-                    <button
-                      type="button"
-                      class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center cursor-pointer"
-                      @click="deleteShippingZone(z.id)"
-                    >
-                      <Trash2 :size="13" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
-
         <!-- 5. SETTINGS TAB -->
         <template v-else-if="activeTab === 'settings'">
           <div class="space-y-5 max-w-4xl">
@@ -2168,6 +2035,16 @@ const selectTab = (id) => {
                 @click="settingsSubTab = 'profile'"
               >
                 {{ t.navSettings }}
+              </button>
+              <button
+                type="button"
+                :class="[
+                  'h-9 px-3.5 rounded-xl text-xs font-bold cursor-pointer transition-colors',
+                  settingsSubTab === 'delivery' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                ]"
+                @click="settingsSubTab = 'delivery'"
+              >
+                {{ t.navDelivery }}
               </button>
               <button
                 type="button"
@@ -2239,6 +2116,117 @@ const selectTab = (id) => {
               >
                 {{ t.navInstall }}
               </button>
+            </div>
+
+            <!-- SUB-TAB: Delivery Settings & Map -->
+            <div v-if="settingsSubTab === 'delivery'" class="space-y-5">
+              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-4">
+                <div>
+                  <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navDelivery }}</h2>
+                  <p class="text-xs text-[#6E6E73] mt-0.5">{{ t.deliveryAreaHint }}</p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.maxDeliveryDistance }}</label>
+                    <input
+                      v-model="restaurantConfig.maxDeliveryKm"
+                      type="number"
+                      min="1"
+                      max="100"
+                      class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                      @change="renderMapZones()"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.shippingFee }} ({{ store.currency }})</label>
+                    <input
+                      v-model="store.shippingFee"
+                      type="number"
+                      min="0"
+                      class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.freeShippingOver }} ({{ store.currency }})</label>
+                    <input
+                      v-model="store.freeShippingOver"
+                      type="number"
+                      min="0"
+                      class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+                  @click="renderMapZones(); showToast(t.savedToast)"
+                >
+                  {{ t.save }}
+                </button>
+              </div>
+
+              <!-- Interactive OpenStreetMap Delivery Zone Drawer -->
+              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.drawZoneMap }}</h3>
+                    <p class="text-xs text-[#6E6E73] mt-0.5">{{ t.clickMapPoints }}</p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button
+                      v-if="draftPoints.length > 0"
+                      type="button"
+                      class="h-9 px-3.5 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-xs font-semibold cursor-pointer"
+                      @click="clearDraftPoints"
+                    >
+                      {{ t.clearPoints }} ({{ draftPoints.length }})
+                    </button>
+                    <button
+                      type="button"
+                      class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                      @click="showZoneForm = !showZoneForm"
+                    >
+                      <Plus :size="14" />
+                      <span>{{ t.addZone }}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div ref="mapContainer" class="w-full h-72 sm:h-80 rounded-2xl border border-[#E5E5EA] overflow-hidden z-10 bg-[#ECECEF]" />
+
+                <form
+                  v-if="showZoneForm"
+                  class="p-4 rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"
+                  @submit.prevent="addShippingZone"
+                >
+                  <input v-model="zoneForm.name" type="text" required :placeholder="t.zoneName" class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs" />
+                  <input v-model="zoneForm.price" type="number" min="0" required :placeholder="`${t.zonePrice} (${store.currency})`" class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono" />
+                  <input v-model="zoneForm.estTime" type="text" :placeholder="t.estTime" class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs" />
+                  <input v-model="zoneForm.color" type="color" class="h-10 w-full rounded-xl border border-[#D2D2D7] bg-white px-1 cursor-pointer" />
+                  <button type="submit" class="h-10 px-4 rounded-xl bg-[#0066CC] text-white text-xs font-bold cursor-pointer">{{ t.save }}</button>
+                </form>
+
+                <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
+                  <div v-for="z in shippingZones" :key="z.id" class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div class="flex items-center gap-3">
+                      <span class="h-3.5 w-3.5 rounded-full shrink-0" :style="{ backgroundColor: z.color || '#0066CC' }" />
+                      <div>
+                        <div class="text-xs font-bold text-[#1D1D1F]">{{ z.name }}</div>
+                        <div class="text-[11px] text-[#6E6E73]">{{ z.points?.length ? `${z.points.length} pts` : z.range }} • {{ z.estTime }}</div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <span class="text-xs font-extrabold tabular-nums text-[#0066CC]">{{ z.price }} {{ store.currency }}</span>
+                      <button type="button" class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center cursor-pointer" @click="deleteShippingZone(z.id)">
+                        <Trash2 :size="13" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="filteredOrders.length === 0" class="p-8 text-center text-xs text-[#6E6E73]">
+                  No orders match the current filter.
+                </div>
+              </div>
             </div>
 
             <!-- SUB-TAB: Telegram -->
