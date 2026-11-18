@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import crypto from 'node:crypto';
 import { buildSellerWorkerScript } from '@/lib/cloudflareWorkerTemplate';
+
+export const runtime = 'edge';
 
 const CF_API = 'https://api.cloudflare.com/client/v4';
 const CORS_HEADERS = {
@@ -19,9 +20,11 @@ function jsonRes(data, status = 200) {
 
 function randomCode(len = 6) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint32Array(len);
+  globalThis.crypto.getRandomValues(bytes);
   let out = '';
   for (let i = 0; i < len; i++) {
-    out += chars.charAt(crypto.randomInt(0, chars.length));
+    out += chars.charAt(bytes[i] % chars.length);
   }
   return out;
 }
