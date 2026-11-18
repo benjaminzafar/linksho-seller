@@ -30,6 +30,7 @@ import {
   EyeOff,
   Upload,
   Tag,
+  Utensils,
 } from 'lucide-vue-next';
 import { SELLER_LANGUAGES, TRANSLATIONS } from '~/utils/i18n';
 
@@ -39,6 +40,7 @@ const lang = ref('en');
 const activeTab = ref('overview'); // 'overview' | 'orders' | 'products' | 'customers' | 'telegram' | 'payments' | 'settings'
 const mobileNavOpen = ref(false);
 const sidebarCollapsed = ref(false);
+const settingsSubTab = ref('general'); // 'general' | 'locale' | 'business' | 'smtp'
 const searchQuery = ref('');
 const orderFilter = ref('all');
 const categoryFilter = ref('all');
@@ -879,6 +881,32 @@ const selectTab = (id) => {
         </div>
 
         <div class="flex items-center gap-2.5 shrink-0">
+          <!-- Dedicated Mode Switcher: Restaurant vs Online Shop -->
+          <div class="hidden sm:inline-flex items-center p-1 rounded-full bg-[#F5F5F7] border border-[#E5E5EA]">
+            <button
+              type="button"
+              :class="[
+                'h-7 px-3 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all',
+                store.type === 'restaurant' ? 'bg-[#0066CC] text-white shadow-xs' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+              ]"
+              @click="store.type = 'restaurant'; showToast(t.savedToast)"
+            >
+              <Utensils :size="12" />
+              <span>{{ t.typeRestaurant }}</span>
+            </button>
+            <button
+              type="button"
+              :class="[
+                'h-7 px-3 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all',
+                store.type === 'webshop' ? 'bg-[#0066CC] text-white shadow-xs' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+              ]"
+              @click="store.type = 'webshop'; showToast(t.savedToast)"
+            >
+              <ShoppingBag :size="12" />
+              <span>{{ t.typeWebshop }}</span>
+            </button>
+          </div>
+
           <div class="relative flex items-center">
             <Globe :size="14" class="absolute left-3 text-[#6E6E73] pointer-events-none" />
             <select
@@ -1735,6 +1763,52 @@ const selectTab = (id) => {
         <!-- SETTINGS TAB -->
         <template v-else-if="activeTab === 'settings'">
           <div class="space-y-5 max-w-3xl">
+            <!-- Clean Apple Segmented Sub-Navigation (Prevents Mixing Settings) -->
+            <div class="inline-flex flex-wrap items-center gap-1 p-1.5 rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA]">
+              <button
+                type="button"
+                :class="[
+                  'h-9 px-4 rounded-xl text-xs font-bold cursor-pointer transition-all',
+                  settingsSubTab === 'general' ? 'bg-[#0066CC] text-white shadow-xs' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                ]"
+                @click="settingsSubTab = 'general'"
+              >
+                {{ t.brandingTitle }}
+              </button>
+              <button
+                type="button"
+                :class="[
+                  'h-9 px-4 rounded-xl text-xs font-bold cursor-pointer transition-all',
+                  settingsSubTab === 'locale' ? 'bg-[#0066CC] text-white shadow-xs' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                ]"
+                @click="settingsSubTab = 'locale'"
+              >
+                {{ t.countryCurrencyTitle }}
+              </button>
+              <button
+                type="button"
+                :class="[
+                  'h-9 px-4 rounded-xl text-xs font-bold cursor-pointer transition-all',
+                  settingsSubTab === 'business' ? 'bg-[#0066CC] text-white shadow-xs' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                ]"
+                @click="settingsSubTab = 'business'"
+              >
+                {{ store.type === 'restaurant' ? t.restaurantSettings : t.webshopSettings }}
+              </button>
+              <button
+                type="button"
+                :class="[
+                  'h-9 px-4 rounded-xl text-xs font-bold cursor-pointer transition-all',
+                  settingsSubTab === 'smtp' ? 'bg-[#0066CC] text-white shadow-xs' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                ]"
+                @click="settingsSubTab = 'smtp'"
+              >
+                {{ t.smtpSettings }}
+              </button>
+            </div>
+
+            <!-- SUB-TAB 1: LOGO, BRANDING & STORE PROFILE -->
+            <div v-if="settingsSubTab === 'general'" class="space-y-5">
             <!-- Logo & Branding Upload -->
             <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
               <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.brandingTitle }}</h2>
@@ -1811,8 +1885,8 @@ const selectTab = (id) => {
               </div>
             </div>
 
-            <!-- Country, Storefront Languages & Currency -->
-            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+            <!-- SUB-TAB 2: Country, Storefront Languages & Currency -->
+            <div v-if="settingsSubTab === 'locale'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
               <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.countryCurrencyTitle }}</h2>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -1945,8 +2019,10 @@ const selectTab = (id) => {
                 {{ t.save }}
               </button>
             </div>
+            </div>
 
-            <!-- Conditional Business-Specific Settings: Restaurant vs Online Shop -->
+            <!-- SUB-TAB 3: Conditional Business-Specific Settings (Restaurant OR Online Shop ONLY) -->
+            <div v-if="settingsSubTab === 'business'">
             <div v-if="store.type === 'restaurant'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
               <h3 class="text-base font-extrabold text-[#1D1D1F]">{{ t.restaurantSettings }}</h3>
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -2058,9 +2134,10 @@ const selectTab = (id) => {
                 </button>
               </div>
             </div>
+            </div>
 
-            <!-- SMTP Email Settings -->
-            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+            <!-- SUB-TAB 4: SMTP Email Settings -->
+            <div v-if="settingsSubTab === 'smtp'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
               <div class="flex items-center gap-2">
                 <Mail :size="17" class="text-[#0066CC]" />
                 <h3 class="text-base font-extrabold text-[#1D1D1F]">{{ t.smtpSettings }}</h3>
