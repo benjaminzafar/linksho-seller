@@ -3,6 +3,19 @@ import crypto from 'node:crypto';
 import { buildSellerWorkerScript } from '@/lib/cloudflareWorkerTemplate';
 
 const CF_API = 'https://api.cloudflare.com/client/v4';
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
+function jsonRes(data, status = 200) {
+  return NextResponse.json(data, { status, headers: CORS_HEADERS });
+}
 
 function randomCode(len = 6) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -36,9 +49,9 @@ export async function POST(req) {
     const phone = String(body.phone || '').trim();
 
     if (!cfToken || !storeName) {
-      return NextResponse.json(
+      return jsonRes(
         { ok: false, error: 'توکن کلودفلر و نام فروشگاه/رستوران الزامی است.' },
-        { status: 400 }
+        400
       );
     }
 
@@ -46,7 +59,7 @@ export async function POST(req) {
     const accRes = await cfFetch('/accounts?per_page=5', cfToken);
     if (!accRes.ok || !Array.isArray(accRes.data?.result) || accRes.data.result.length === 0) {
       const msg = accRes.data?.errors?.[0]?.message || 'توکن کلودفلر معتبر نیست یا دسترسی Account ندارد.';
-      return NextResponse.json({ ok: false, error: msg }, { status: 401 });
+      return jsonRes({ ok: false, error: msg }, 401);
     }
     const accountId = String(body.accountId || '').trim() || accRes.data.result[0].id;
 
@@ -54,12 +67,12 @@ export async function POST(req) {
     const subRes = await cfFetch(`/accounts/${accountId}/workers/subdomain`, cfToken);
     const subdomain = subRes.data?.result?.subdomain;
     if (!subdomain) {
-      return NextResponse.json(
+      return jsonRes(
         {
           ok: false,
           error: 'ابتدا در پنل کلودفلر (Workers & Pages) یک ساب‌دامین رایگان workers.dev فعال کنید و دوباره تلاش نمایید.',
         },
-        { status: 400 }
+        400
       );
     }
 
@@ -76,7 +89,7 @@ export async function POST(req) {
 
     if (!dbRes.ok || !dbRes.data?.result?.uuid) {
       const errMsg = dbRes.data?.errors?.[0]?.message || 'خطا در ساخت دیتابیس D1 روی کلودفلر (دسترسی D1:Edit را بررسی کنید).';
-      return NextResponse.json({ ok: false, error: errMsg }, { status: 400 });
+      return jsonRes({ ok: false, error: errMsg }, 400);
     }
     const dbId = dbRes.data.result.uuid;
 
@@ -173,20 +186,23 @@ export async function POST(req) {
     const panelUrl = `https://${workerName}.${subdomain}.workers.dev`;
     const storefrontApiUrl = `${panelUrl}/api/storefront?key=${apiKey}`;
 
-    return NextResponse.json({
-      ok: true,
-      panelUrl,
-      storefrontApiUrl,
-      storeId,
-      pinCode,
-      apiKey,
-      dbId,
-      workerName,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        panelUrl,
+        storefrontApiUrl,
+        storeId,
+        pinCode,
+        apiKey,
+        dbId,
+        workerName,
+      },
+      { headers: CORS_HEADERS }
+    );
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err?.message || 'خطا در دیپلوی خودکار کلودفلر' },
-      { status: 500 }
+      { status: 500, headers: CORS_HEADERS }
     );
   }
 }
