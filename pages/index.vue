@@ -24,6 +24,10 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ExternalLink,
+  Truck,
+  Mail,
+  Eye,
+  EyeOff,
 } from 'lucide-vue-next';
 import { SELLER_LANGUAGES, TRANSLATIONS } from '~/utils/i18n';
 
@@ -59,6 +63,40 @@ const stripeConfig = ref({
 const telegramConfig = ref({
   botToken: '',
   chatId: '',
+});
+
+const smtpConfig = ref({
+  host: 'smtp.gmail.com',
+  port: 587,
+  security: 'TLS',
+  username: '',
+  password: '',
+  fromEmail: 'orders@stockholmbistro.se',
+});
+const showSmtpPass = ref(false);
+
+const shippingZones = ref([
+  { id: 'ZN-1', name: 'City Center', range: '0 - 5 km / 111 20 - 114 55', price: 49, estTime: '25-35 min' },
+  { id: 'ZN-2', name: 'Greater Area', range: '5 - 15 km / 115 00 - 129 99', price: 89, estTime: '40-55 min' },
+]);
+const showZoneForm = ref(false);
+const zoneForm = ref({ name: '', range: '', price: '', estTime: '' });
+
+const restaurantConfig = ref({
+  prepTime: 25,
+  minOrder: 150,
+  openingHours: 'Mon-Sun 11:00 - 22:00',
+  pickupEnabled: true,
+  deliveryEnabled: true,
+  dineInEnabled: false,
+});
+
+const webshopConfig = ref({
+  vatRate: 25,
+  returnDays: 14,
+  carrier: 'PostNord',
+  trackStock: true,
+  lowStockThreshold: 5,
 });
 
 const products = ref([
@@ -166,6 +204,10 @@ onMounted(() => {
       if (parsed.store) store.value = { ...store.value, ...parsed.store };
       if (parsed.stripeConfig) stripeConfig.value = { ...stripeConfig.value, ...parsed.stripeConfig };
       if (parsed.telegramConfig) telegramConfig.value = { ...telegramConfig.value, ...parsed.telegramConfig };
+      if (parsed.smtpConfig) smtpConfig.value = { ...smtpConfig.value, ...parsed.smtpConfig };
+      if (Array.isArray(parsed.shippingZones)) shippingZones.value = parsed.shippingZones;
+      if (parsed.restaurantConfig) restaurantConfig.value = { ...restaurantConfig.value, ...parsed.restaurantConfig };
+      if (parsed.webshopConfig) webshopConfig.value = { ...webshopConfig.value, ...parsed.webshopConfig };
       if (Array.isArray(parsed.products)) products.value = parsed.products;
       if (Array.isArray(parsed.orders)) orders.value = parsed.orders;
     }
@@ -173,7 +215,7 @@ onMounted(() => {
 });
 
 watch(
-  [lang, store, stripeConfig, telegramConfig, products, orders],
+  [lang, store, stripeConfig, telegramConfig, smtpConfig, shippingZones, restaurantConfig, webshopConfig, products, orders],
   () => {
     try {
       localStorage.setItem(
@@ -183,6 +225,10 @@ watch(
           store: store.value,
           stripeConfig: stripeConfig.value,
           telegramConfig: telegramConfig.value,
+          smtpConfig: smtpConfig.value,
+          shippingZones: shippingZones.value,
+          restaurantConfig: restaurantConfig.value,
+          webshopConfig: webshopConfig.value,
           products: products.value,
           orders: orders.value,
         })
@@ -365,6 +411,30 @@ const deleteProduct = (id) => {
   showToast(t.value.savedToast);
 };
 
+const addShippingZone = () => {
+  const cleanName = zoneForm.value.name.trim();
+  const numPrice = Number(zoneForm.value.price);
+  if (!cleanName || Number.isNaN(numPrice) || numPrice < 0) return;
+  shippingZones.value = [
+    ...shippingZones.value,
+    {
+      id: `ZN-${Math.floor(10 + Math.random() * 90)}`,
+      name: cleanName,
+      range: zoneForm.value.range.trim() || '-',
+      price: numPrice,
+      estTime: zoneForm.value.estTime.trim() || '-',
+    },
+  ];
+  zoneForm.value = { name: '', range: '', price: '', estTime: '' };
+  showZoneForm.value = false;
+  showToast(t.value.savedToast);
+};
+
+const deleteShippingZone = (id) => {
+  shippingZones.value = shippingZones.value.filter((z) => z.id !== id);
+  showToast(t.value.savedToast);
+};
+
 const primaryNav = computed(() => [
   { id: 'overview', label: t.value.navOverview, icon: LayoutDashboard },
   { id: 'orders', label: t.value.navOrders, icon: ShoppingBag, badge: activeOrdersCount.value },
@@ -373,6 +443,7 @@ const primaryNav = computed(() => [
 ]);
 
 const setupNav = computed(() => [
+  { id: 'shipping', label: t.value.navShipping, icon: Truck },
   { id: 'telegram', label: t.value.navTelegram, icon: Send },
   { id: 'payments', label: t.value.navPayments, icon: CreditCard },
   { id: 'settings', label: t.value.navSettings, icon: Settings },
@@ -1042,6 +1113,120 @@ const selectTab = (id) => {
           </div>
         </template>
 
+        <!-- SHIPPING & ZONES TAB -->
+        <template v-else-if="activeTab === 'shipping'">
+          <div class="space-y-5">
+            <!-- Base Shipping Price & Free Threshold -->
+            <div class="max-w-2xl rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-4">
+              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navShipping }}</h2>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.shippingFee }} ({{ store.currency }})</label>
+                  <input
+                    v-model="store.shippingFee"
+                    type="number"
+                    min="0"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.freeShippingOver }} ({{ store.currency }})</label>
+                  <input
+                    v-model="store.freeShippingOver"
+                    type="number"
+                    min="0"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+                @click="showToast(t.savedToast)"
+              >
+                {{ t.save }}
+              </button>
+            </div>
+
+            <!-- Shipping Zones -->
+            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.shippingZones }} ({{ shippingZones.length }})</h3>
+                <button
+                  type="button"
+                  class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                  @click="showZoneForm = !showZoneForm"
+                >
+                  <Plus :size="14" />
+                  <span>{{ t.addZone }}</span>
+                </button>
+              </div>
+
+              <form
+                v-if="showZoneForm"
+                class="p-4 rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+                @submit.prevent="addShippingZone"
+              >
+                <input
+                  v-model="zoneForm.name"
+                  type="text"
+                  required
+                  :placeholder="t.zoneName"
+                  class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
+                />
+                <input
+                  v-model="zoneForm.range"
+                  type="text"
+                  :placeholder="t.zoneRange"
+                  class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
+                />
+                <input
+                  v-model="zoneForm.price"
+                  type="number"
+                  min="0"
+                  required
+                  :placeholder="`${t.zonePrice} (${store.currency})`"
+                  class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono"
+                />
+                <div class="flex gap-2">
+                  <input
+                    v-model="zoneForm.estTime"
+                    type="text"
+                    :placeholder="t.estTime"
+                    class="flex-1 h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
+                  />
+                  <button type="submit" class="h-10 px-4 rounded-xl bg-[#0066CC] text-white text-xs font-bold cursor-pointer">
+                    {{ t.save }}
+                  </button>
+                </div>
+              </form>
+
+              <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
+                <div
+                  v-for="z in shippingZones"
+                  :key="z.id"
+                  class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                >
+                  <div>
+                    <div class="text-xs font-bold text-[#1D1D1F]">{{ z.name }}</div>
+                    <div class="text-[11px] text-[#6E6E73]">{{ z.range }} • {{ z.estTime }}</div>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="text-xs font-extrabold tabular-nums text-[#0066CC]">{{ z.price }} {{ store.currency }}</span>
+                    <button
+                      type="button"
+                      class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center cursor-pointer"
+                      @click="deleteShippingZone(z.id)"
+                    >
+                      <Trash2 :size="13" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
         <!-- TELEGRAM TAB -->
         <template v-else-if="activeTab === 'telegram'">
           <div class="max-w-xl rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
@@ -1143,59 +1328,253 @@ const selectTab = (id) => {
 
         <!-- SETTINGS TAB -->
         <template v-else-if="activeTab === 'settings'">
-          <div class="max-w-xl rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
-            <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navSettings }}</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.storeName }}</label>
-                <input
-                  v-model="store.name"
-                  type="text"
-                  class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs"
-                />
+          <div class="space-y-5 max-w-3xl">
+            <!-- General Store & Business Type Selector -->
+            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navSettings }}</h2>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.storeName }}</label>
+                  <input
+                    v-model="store.name"
+                    type="text"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.storeType }}</label>
+                  <select
+                    v-model="store.type"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
+                  >
+                    <option value="restaurant">{{ t.typeRestaurant }}</option>
+                    <option value="webshop">{{ t.typeWebshop }}</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.phone }}</label>
+                  <input
+                    v-model="store.phone"
+                    type="text"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.customDomain }}</label>
+                  <input
+                    v-model="store.customDomain"
+                    type="text"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.address }}</label>
+                  <input
+                    v-model="store.address"
+                    type="text"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs"
+                  />
+                </div>
               </div>
+              <button
+                type="button"
+                class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+                @click="showToast(t.savedToast)"
+              >
+                {{ t.save }}
+              </button>
+            </div>
+
+            <!-- Conditional Business-Specific Settings: Restaurant vs Online Shop -->
+            <div v-if="store.type === 'restaurant'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+              <h3 class="text-base font-extrabold text-[#1D1D1F]">{{ t.restaurantSettings }}</h3>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.prepTime }}</label>
+                  <input
+                    v-model="restaurantConfig.prepTime"
+                    type="number"
+                    min="5"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.minOrder }} ({{ store.currency }})</label>
+                  <input
+                    v-model="restaurantConfig.minOrder"
+                    type="number"
+                    min="0"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.openingHours }}</label>
+                  <input
+                    v-model="restaurantConfig.openingHours"
+                    type="text"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs"
+                  />
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-3 pt-1">
+                <label class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] text-xs font-semibold cursor-pointer">
+                  <input v-model="restaurantConfig.pickupEnabled" type="checkbox" class="accent-[#0066CC]" />
+                  <span>{{ t.pickupEnabled }}</span>
+                </label>
+                <label class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] text-xs font-semibold cursor-pointer">
+                  <input v-model="restaurantConfig.deliveryEnabled" type="checkbox" class="accent-[#0066CC]" />
+                  <span>{{ t.deliveryEnabled }}</span>
+                </label>
+                <label class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] text-xs font-semibold cursor-pointer">
+                  <input v-model="restaurantConfig.dineInEnabled" type="checkbox" class="accent-[#0066CC]" />
+                  <span>{{ t.dineInEnabled }}</span>
+                </label>
+              </div>
+              <button
+                type="button"
+                class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+                @click="showToast(t.savedToast)"
+              >
+                {{ t.save }}
+              </button>
+            </div>
+
+            <div v-else class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+              <h3 class="text-base font-extrabold text-[#1D1D1F]">{{ t.webshopSettings }}</h3>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.vatRate }}</label>
+                  <input
+                    v-model="webshopConfig.vatRate"
+                    type="number"
+                    min="0"
+                    max="100"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.returnDays }}</label>
+                  <input
+                    v-model="webshopConfig.returnDays"
+                    type="number"
+                    min="0"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.carrier }}</label>
+                  <select
+                    v-model="webshopConfig.carrier"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
+                  >
+                    <option value="PostNord">PostNord</option>
+                    <option value="DHL">DHL</option>
+                    <option value="Bring">Bring</option>
+                    <option value="Custom">Custom</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.lowStockThreshold }}</label>
+                  <input
+                    v-model="webshopConfig.lowStockThreshold"
+                    type="number"
+                    min="0"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+              </div>
+              <label class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] text-xs font-semibold cursor-pointer">
+                <input v-model="webshopConfig.trackStock" type="checkbox" class="accent-[#0066CC]" />
+                <span>{{ t.trackStock }}</span>
+              </label>
               <div>
-                <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.storeType }}</label>
-                <select
-                  v-model="store.type"
-                  class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
+                <button
+                  type="button"
+                  class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+                  @click="showToast(t.savedToast)"
                 >
-                  <option value="restaurant">{{ t.typeRestaurant }}</option>
-                  <option value="webshop">{{ t.typeWebshop }}</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.phone }}</label>
-                <input
-                  v-model="store.phone"
-                  type="text"
-                  class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
-                />
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.customDomain }}</label>
-                <input
-                  v-model="store.customDomain"
-                  type="text"
-                  class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
-                />
-              </div>
-              <div class="sm:col-span-2">
-                <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.address }}</label>
-                <input
-                  v-model="store.address"
-                  type="text"
-                  class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs"
-                />
+                  {{ t.save }}
+                </button>
               </div>
             </div>
-            <button
-              type="button"
-              class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-              @click="showToast(t.savedToast)"
-            >
-              {{ t.save }}
-            </button>
+
+            <!-- SMTP Email Settings -->
+            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+              <div class="flex items-center gap-2">
+                <Mail :size="17" class="text-[#0066CC]" />
+                <h3 class="text-base font-extrabold text-[#1D1D1F]">{{ t.smtpSettings }}</h3>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.smtpHost }}</label>
+                  <input
+                    v-model="smtpConfig.host"
+                    type="text"
+                    placeholder="smtp.gmail.com"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.smtpPort }}</label>
+                  <input
+                    v-model="smtpConfig.port"
+                    type="number"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.smtpSecurity }}</label>
+                  <select
+                    v-model="smtpConfig.security"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
+                  >
+                    <option value="TLS">TLS / STARTTLS</option>
+                    <option value="SSL">SSL</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.smtpUser }}</label>
+                  <input
+                    v-model="smtpConfig.username"
+                    type="text"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.smtpPass }}</label>
+                  <div class="relative">
+                    <input
+                      v-model="smtpConfig.password"
+                      :type="showSmtpPass ? 'text' : 'password'"
+                      class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] pl-3.5 pr-9 text-xs font-mono"
+                    />
+                    <button
+                      type="button"
+                      class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6E6E73] hover:text-[#1D1D1F] cursor-pointer"
+                      @click="showSmtpPass = !showSmtpPass"
+                    >
+                      <EyeOff v-if="showSmtpPass" :size="15" />
+                      <Eye v-else :size="15" />
+                    </button>
+                  </div>
+                </div>
+                <div class="sm:col-span-3">
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.fromEmail }}</label>
+                  <input
+                    v-model="smtpConfig.fromEmail"
+                    type="email"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+                @click="showToast(t.savedToast)"
+              >
+                {{ t.save }}
+              </button>
+            </div>
           </div>
         </template>
       </main>
