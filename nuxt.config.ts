@@ -8,16 +8,16 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      title: 'Seller pannel | پنل فروش اختصاصی',
-      htmlAttrs: { lang: 'fa', dir: 'rtl' },
+      title: 'Seller pannel | Merchant Dashboard',
+      htmlAttrs: { lang: 'en', dir: 'ltr' },
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        { name: 'description', content: 'Seller pannel — ساخت و مدیریت پنل فروش و فروشگاه آنلاین اختصاصی روی کلودفلر' },
+        { name: 'description', content: 'Seller pannel — Multi-language Merchant Dashboard for Restaurants & Online Stores' },
       ],
       link: [
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
-        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap' },
+        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap' },
       ],
     },
   },
