@@ -385,11 +385,11 @@ const selectTab = (id) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] flex" dir="ltr">
+  <div class="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] flex lg:p-4 lg:gap-4" dir="ltr">
     <!-- Toast -->
     <div
       v-if="toastMsg"
-      class="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl bg-[#1D1D1F] text-white px-4 py-2.5 shadow-lg text-xs font-semibold"
+      class="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-2xl bg-[#1D1D1F] text-white px-4 py-2.5 shadow-lg text-xs font-semibold"
     >
       <CheckCircle2 :size="15" class="text-emerald-400 shrink-0" />
       <span>{{ toastMsg }}</span>
@@ -398,34 +398,34 @@ const selectTab = (id) => {
     <!-- Mobile Backdrop -->
     <div
       v-if="mobileNavOpen"
-      class="fixed inset-0 z-40 bg-black/40 lg:hidden"
+      class="fixed inset-0 z-40 bg-black/30 backdrop-blur-xs lg:hidden"
       @click="mobileNavOpen = false"
     />
 
-    <!-- Sidebar -->
+    <!-- Apple Floating Rounded Sidebar -->
     <aside
       :class="[
-        'fixed inset-y-0 left-0 z-50 bg-[#111214] text-white flex flex-col justify-between transition-all duration-200 lg:static lg:translate-x-0 shrink-0 border-r border-white/[0.06]',
-        sidebarCollapsed ? 'lg:w-[74px] w-64' : 'w-64',
-        mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
+        'fixed inset-y-3 left-3 z-50 rounded-[28px] bg-[#FBFBFC]/95 backdrop-blur-xl border border-[#E5E5EA] shadow-[0_12px_36px_rgba(29,29,31,0.06)] text-[#1D1D1F] flex flex-col justify-between transition-all duration-200 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:translate-x-0 shrink-0',
+        sidebarCollapsed ? 'lg:w-[76px] w-64' : 'w-64',
+        mobileNavOpen ? 'translate-x-0' : '-translate-x-[115%]'
       ]"
     >
-      <div :class="['space-y-5', sidebarCollapsed ? 'lg:px-3 lg:py-5 p-5' : 'p-5']">
+      <div :class="['space-y-4', sidebarCollapsed ? 'lg:px-3 lg:py-4 p-4' : 'p-4']">
         <!-- Brand & Collapse Toggle -->
-        <div :class="['flex items-center', sidebarCollapsed ? 'lg:justify-center justify-between' : 'justify-between']">
+        <div :class="['flex items-center px-1', sidebarCollapsed ? 'lg:justify-center justify-between' : 'justify-between']">
           <div class="flex items-center gap-3 min-w-0">
-            <div class="h-9 w-9 rounded-xl bg-[#0066CC] flex items-center justify-center font-extrabold text-xs shrink-0 shadow-sm">
+            <div class="h-9 w-9 rounded-2xl bg-[#0066CC] text-white flex items-center justify-center font-extrabold text-xs shrink-0 shadow-[0_4px_12px_rgba(0,102,204,0.25)]">
               SP
             </div>
             <div v-if="!sidebarCollapsed" class="min-w-0">
-              <div class="text-sm font-bold tracking-tight truncate">Seller pannel</div>
-              <div class="text-[11px] text-white/50 truncate">{{ t.brandSub }}</div>
+              <div class="text-sm font-extrabold tracking-tight text-[#1D1D1F] truncate">Seller pannel</div>
+              <div class="text-[11px] text-[#86868B] truncate">{{ t.brandSub }}</div>
             </div>
           </div>
 
           <button
             type="button"
-            class="hidden lg:flex h-8 w-8 rounded-lg items-center justify-center text-white/55 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer shrink-0"
+            class="hidden lg:flex h-8 w-8 rounded-full items-center justify-center text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors cursor-pointer shrink-0"
             :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
             @click="sidebarCollapsed = !sidebarCollapsed"
           >
@@ -435,10 +435,10 @@ const selectTab = (id) => {
 
           <button
             type="button"
-            class="lg:hidden p-1.5 rounded-lg text-white/70 hover:text-white"
+            class="lg:hidden h-8 w-8 rounded-full flex items-center justify-center text-[#6E6E73] hover:bg-[#F5F5F7]"
             @click="mobileNavOpen = false"
           >
-            <X :size="18" />
+            <X :size="17" />
           </button>
         </div>
 
@@ -447,20 +447,20 @@ const selectTab = (id) => {
           type="button"
           :title="store.isOpen ? t.storeOpen : t.storeClosed"
           :class="[
-            'w-full rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 py-2.5 flex items-center text-xs font-semibold transition-colors cursor-pointer',
+            'w-full rounded-2xl bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] py-2.5 flex items-center text-xs font-semibold transition-colors cursor-pointer',
             sidebarCollapsed ? 'lg:justify-center lg:px-0 px-3.5 justify-between' : 'px-3.5 justify-between'
           ]"
           @click="store.isOpen = !store.isOpen; showToast(t.savedToast)"
         >
           <span class="flex items-center gap-2">
-            <span :class="['h-2 w-2 rounded-full shrink-0', store.isOpen ? 'bg-emerald-400' : 'bg-rose-400']" />
-            <span v-if="!sidebarCollapsed">{{ store.isOpen ? t.storeOpen : t.storeClosed }}</span>
+            <span :class="['h-2 w-2 rounded-full shrink-0', store.isOpen ? 'bg-emerald-500' : 'bg-rose-500']" />
+            <span v-if="!sidebarCollapsed" class="text-[#1D1D1F]">{{ store.isOpen ? t.storeOpen : t.storeClosed }}</span>
           </span>
           <span
             v-if="!sidebarCollapsed"
             :class="[
               'w-8 h-4.5 rounded-full p-0.5 transition-colors flex items-center',
-              store.isOpen ? 'bg-emerald-500 justify-end' : 'bg-white/20 justify-start'
+              store.isOpen ? 'bg-emerald-500 justify-end' : 'bg-[#D2D2D7] justify-start'
             ]"
           >
             <span class="h-3.5 w-3.5 rounded-full bg-white shadow-xs block" />
@@ -475,11 +475,11 @@ const selectTab = (id) => {
             type="button"
             :title="sidebarCollapsed ? item.label : undefined"
             :class="[
-              'w-full flex items-center rounded-xl text-xs font-semibold transition-all cursor-pointer relative',
+              'w-full flex items-center rounded-2xl text-xs font-semibold transition-all cursor-pointer',
               sidebarCollapsed ? 'lg:justify-center lg:px-0 lg:py-2.5 px-3.5 py-2.5 justify-between' : 'px-3.5 py-2.5 justify-between',
               activeTab === item.id
-                ? 'bg-white text-[#1D1D1F] shadow-xs'
-                : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
+                ? 'bg-[#0066CC] text-white shadow-[0_4px_12px_rgba(0,102,204,0.22)]'
+                : 'text-[#515154] hover:text-[#1D1D1F] hover:bg-[#F5F5F7]'
             ]"
             @click="selectTab(item.id)"
           >
@@ -491,7 +491,7 @@ const selectTab = (id) => {
               v-if="item.badge !== undefined && !sidebarCollapsed"
               :class="[
                 'px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums',
-                activeTab === item.id ? 'bg-[#0066CC] text-white' : 'bg-white/10 text-white/80'
+                activeTab === item.id ? 'bg-white/20 text-white' : 'bg-[#ECECEF] text-[#1D1D1F]'
               ]"
             >
               {{ item.badge }}
@@ -500,7 +500,7 @@ const selectTab = (id) => {
         </nav>
 
         <!-- Divider -->
-        <div class="border-t border-white/[0.08] pt-3">
+        <div class="border-t border-[#E5E5EA] pt-3">
           <nav class="space-y-1">
             <button
               v-for="item in setupNav"
@@ -508,11 +508,11 @@ const selectTab = (id) => {
               type="button"
               :title="sidebarCollapsed ? item.label : undefined"
               :class="[
-                'w-full flex items-center rounded-xl text-xs font-semibold transition-all cursor-pointer',
+                'w-full flex items-center rounded-2xl text-xs font-semibold transition-all cursor-pointer',
                 sidebarCollapsed ? 'lg:justify-center lg:px-0 lg:py-2.5 px-3.5 py-2.5 justify-between' : 'px-3.5 py-2.5 justify-between',
                 activeTab === item.id
-                  ? 'bg-white text-[#1D1D1F] shadow-xs'
-                  : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
+                  ? 'bg-[#0066CC] text-white shadow-[0_4px_12px_rgba(0,102,204,0.22)]'
+                  : 'text-[#515154] hover:text-[#1D1D1F] hover:bg-[#F5F5F7]'
               ]"
               @click="selectTab(item.id)"
             >
@@ -526,18 +526,18 @@ const selectTab = (id) => {
       </div>
 
       <!-- Footer Domain & SSL -->
-      <div :class="['border-t border-white/[0.08] text-[11px] text-white/60', sidebarCollapsed ? 'lg:p-3 p-5 flex justify-center' : 'p-5 space-y-2']">
+      <div :class="['border-t border-[#E5E5EA] text-[11px] text-[#6E6E73]', sidebarCollapsed ? 'lg:p-3 p-4 flex justify-center' : 'p-4 space-y-1.5']">
         <a
           :href="`https://${store.customDomain}`"
           target="_blank"
           rel="noopener noreferrer"
           :title="store.customDomain"
-          class="flex items-center justify-between gap-2 text-white/80 hover:text-white transition-colors"
+          class="flex items-center justify-between gap-2 text-[#1D1D1F] hover:text-[#0066CC] font-semibold transition-colors"
         >
           <span v-if="!sidebarCollapsed" class="truncate font-mono">{{ store.customDomain }}</span>
-          <ExternalLink :size="13" class="shrink-0 text-white/55" />
+          <ExternalLink :size="13" class="shrink-0 text-[#86868B]" />
         </a>
-        <div v-if="!sidebarCollapsed" class="flex items-center gap-1.5 text-emerald-400 font-semibold">
+        <div v-if="!sidebarCollapsed" class="flex items-center gap-1.5 text-emerald-600 font-semibold">
           <Lock :size="12" />
           <span>{{ t.sslActive }}</span>
         </div>
@@ -546,24 +546,24 @@ const selectTab = (id) => {
 
     <!-- Main Workspace -->
     <div class="flex-1 min-w-0 flex flex-col">
-      <!-- Top Bar -->
-      <header class="sticky top-0 z-30 h-16 bg-[#FBFBFC]/90 backdrop-blur-md border-b border-[#E5E5EA] px-4 sm:px-6 flex items-center justify-between gap-3">
+      <!-- Apple Floating Rounded Top Navbar -->
+      <header class="sticky top-3 lg:top-4 z-30 mx-3 mt-3 lg:mx-0 lg:mt-0 h-14 rounded-[22px] bg-[#FBFBFC]/90 backdrop-blur-xl border border-[#E5E5EA] shadow-[0_6px_24px_rgba(29,29,31,0.04)] px-3.5 sm:px-5 flex items-center justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0 flex-1">
           <button
             type="button"
-            class="lg:hidden h-9 w-9 rounded-xl bg-white border border-[#E5E5EA] flex items-center justify-center text-[#1D1D1F]"
+            class="lg:hidden h-9 w-9 rounded-full bg-[#F5F5F7] border border-[#E5E5EA] flex items-center justify-center text-[#1D1D1F]"
             @click="mobileNavOpen = true"
           >
-            <Menu :size="18" />
+            <Menu :size="17" />
           </button>
 
           <div class="relative w-full max-w-sm">
-            <Search :size="14" class="absolute left-3 top-1/2 -translate-y-1/2 text-[#86868B] pointer-events-none" />
+            <Search :size="14" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#86868B] pointer-events-none" />
             <input
               v-model="searchQuery"
               type="text"
               :placeholder="t.searchPlaceholder"
-              class="w-full h-9 rounded-full bg-[#F5F5F7] border border-[#E5E5EA] pl-9 pr-4 text-xs focus:bg-white focus:border-[#0066CC] focus:outline-none"
+              class="w-full h-9 rounded-full bg-[#F5F5F7] border border-[#E5E5EA] pl-9 pr-4 text-xs focus:bg-white focus:border-[#0066CC] focus:outline-none transition-colors"
             />
           </div>
         </div>
@@ -573,7 +573,7 @@ const selectTab = (id) => {
             <Globe :size="14" class="absolute left-3 text-[#6E6E73] pointer-events-none" />
             <select
               v-model="lang"
-              class="h-9 rounded-full bg-white border border-[#E5E5EA] pl-8 pr-3 text-xs font-semibold text-[#1D1D1F] focus:border-[#0066CC] focus:outline-none cursor-pointer"
+              class="h-9 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] pl-8 pr-3 text-xs font-semibold text-[#1D1D1F] focus:border-[#0066CC] focus:outline-none cursor-pointer transition-colors"
             >
               <option v-for="l in SELLER_LANGUAGES" :key="l.code" :value="l.code">
                 {{ l.flag }} {{ l.label }}
@@ -583,7 +583,7 @@ const selectTab = (id) => {
         </div>
       </header>
 
-      <main class="p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
+      <main class="p-3 sm:p-4 lg:px-1 lg:pt-5 lg:pb-8 max-w-7xl w-full mx-auto space-y-5">
         <!-- OVERVIEW TAB -->
         <template v-if="activeTab === 'overview'">
           <!-- Page Title Bar -->
