@@ -40,7 +40,7 @@ const lang = ref('en');
 const activeTab = ref('overview'); // 'overview' | 'orders' | 'products' | 'customers' | 'telegram' | 'payments' | 'settings'
 const mobileNavOpen = ref(false);
 const sidebarCollapsed = ref(false);
-const settingsSubTab = ref('general'); // 'general' | 'locale' | 'business' | 'smtp'
+const settingsSubTab = ref('profile'); // 'profile' | 'branding' | 'locale' | 'business' | 'smtp'
 const searchQuery = ref('');
 const orderFilter = ref('all');
 const categoryFilter = ref('all');
@@ -710,10 +710,10 @@ const selectTab = (id) => {
       @click="mobileNavOpen = false"
     />
 
-    <!-- Apple Floating Rounded Sidebar -->
+    <!-- Apple Flat Rounded Sidebar (No heavy drop shadow) -->
     <aside
       :class="[
-        'fixed inset-y-3 left-3 z-50 rounded-[28px] bg-[#FBFBFC]/95 backdrop-blur-xl border border-[#E5E5EA] shadow-[0_12px_36px_rgba(29,29,31,0.06)] text-[#1D1D1F] flex flex-col justify-between transition-all duration-200 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:translate-x-0 shrink-0',
+        'fixed inset-y-3 left-3 z-50 rounded-[26px] bg-[#FBFBFC] border border-[#E5E5EA] text-[#1D1D1F] flex flex-col justify-between transition-all duration-200 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:translate-x-0 shrink-0',
         sidebarCollapsed ? 'lg:w-[76px] w-64' : 'w-64',
         mobileNavOpen ? 'translate-x-0' : '-translate-x-[115%]'
       ]"
@@ -723,7 +723,7 @@ const selectTab = (id) => {
         <div :class="['flex items-center px-1', sidebarCollapsed ? 'lg:justify-center justify-between' : 'justify-between']">
           <div class="flex items-center gap-3 min-w-0">
             <div
-              class="h-9 w-9 rounded-2xl text-white flex items-center justify-center font-extrabold text-xs shrink-0 overflow-hidden shadow-[0_4px_12px_rgba(0,102,204,0.25)]"
+              class="h-9 w-9 rounded-2xl text-white flex items-center justify-center font-extrabold text-xs shrink-0 overflow-hidden"
               :style="{ backgroundColor: store.brandColor || '#0066CC' }"
             >
               <img v-if="store.logoUrl" :src="store.logoUrl" :alt="store.name" class="h-full w-full object-cover" />
@@ -790,7 +790,7 @@ const selectTab = (id) => {
               'w-full flex items-center rounded-2xl text-xs font-semibold transition-all cursor-pointer',
               sidebarCollapsed ? 'lg:justify-center lg:px-0 lg:py-2.5 px-3.5 py-2.5 justify-between' : 'px-3.5 py-2.5 justify-between',
               activeTab === item.id
-                ? 'bg-[#0066CC] text-white shadow-[0_4px_12px_rgba(0,102,204,0.22)]'
+                ? 'bg-[#0066CC] text-white'
                 : 'text-[#515154] hover:text-[#1D1D1F] hover:bg-[#F5F5F7]'
             ]"
             @click="selectTab(item.id)"
@@ -858,8 +858,8 @@ const selectTab = (id) => {
 
     <!-- Main Workspace -->
     <div class="flex-1 min-w-0 flex flex-col">
-      <!-- Apple Floating Rounded Top Navbar -->
-      <header class="sticky top-3 lg:top-4 z-30 mx-3 mt-3 lg:mx-0 lg:mt-0 h-14 rounded-[22px] bg-[#FBFBFC]/90 backdrop-blur-xl border border-[#E5E5EA] shadow-[0_6px_24px_rgba(29,29,31,0.04)] px-3.5 sm:px-5 flex items-center justify-between gap-3">
+      <!-- Apple Flat Rounded Top Navbar (No heavy drop shadow) -->
+      <header class="sticky top-3 lg:top-4 z-30 mx-3 mt-3 lg:mx-0 lg:mt-0 h-14 rounded-[22px] bg-[#FBFBFC]/95 backdrop-blur-md border border-[#E5E5EA] px-3.5 sm:px-5 flex items-center justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0 flex-1">
           <button
             type="button"
@@ -886,8 +886,8 @@ const selectTab = (id) => {
             <button
               type="button"
               :class="[
-                'h-7 px-3 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all',
-                store.type === 'restaurant' ? 'bg-[#0066CC] text-white shadow-xs' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                'h-7 px-3 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors',
+                store.type === 'restaurant' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
               ]"
               @click="store.type = 'restaurant'; showToast(t.savedToast)"
             >
@@ -897,8 +897,8 @@ const selectTab = (id) => {
             <button
               type="button"
               :class="[
-                'h-7 px-3 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-all',
-                store.type === 'webshop' ? 'bg-[#0066CC] text-white shadow-xs' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                'h-7 px-3 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors',
+                store.type === 'webshop' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
               ]"
               @click="store.type = 'webshop'; showToast(t.savedToast)"
             >
@@ -1763,23 +1763,33 @@ const selectTab = (id) => {
         <!-- SETTINGS TAB -->
         <template v-else-if="activeTab === 'settings'">
           <div class="space-y-5 max-w-3xl">
-            <!-- Clean Apple Segmented Sub-Navigation (Prevents Mixing Settings) -->
-            <div class="inline-flex flex-wrap items-center gap-1 p-1.5 rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA]">
+            <!-- Clean Apple Segmented Sub-Navigation (Sorted & Flat) -->
+            <div class="inline-flex flex-wrap items-center gap-1 p-1 rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA]">
               <button
                 type="button"
                 :class="[
-                  'h-9 px-4 rounded-xl text-xs font-bold cursor-pointer transition-all',
-                  settingsSubTab === 'general' ? 'bg-[#0066CC] text-white shadow-xs' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                  'h-9 px-3.5 rounded-xl text-xs font-bold cursor-pointer transition-colors',
+                  settingsSubTab === 'profile' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
                 ]"
-                @click="settingsSubTab = 'general'"
+                @click="settingsSubTab = 'profile'"
+              >
+                {{ t.navSettings }}
+              </button>
+              <button
+                type="button"
+                :class="[
+                  'h-9 px-3.5 rounded-xl text-xs font-bold cursor-pointer transition-colors',
+                  settingsSubTab === 'branding' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                ]"
+                @click="settingsSubTab = 'branding'"
               >
                 {{ t.brandingTitle }}
               </button>
               <button
                 type="button"
                 :class="[
-                  'h-9 px-4 rounded-xl text-xs font-bold cursor-pointer transition-all',
-                  settingsSubTab === 'locale' ? 'bg-[#0066CC] text-white shadow-xs' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                  'h-9 px-3.5 rounded-xl text-xs font-bold cursor-pointer transition-colors',
+                  settingsSubTab === 'locale' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
                 ]"
                 @click="settingsSubTab = 'locale'"
               >
@@ -1788,8 +1798,8 @@ const selectTab = (id) => {
               <button
                 type="button"
                 :class="[
-                  'h-9 px-4 rounded-xl text-xs font-bold cursor-pointer transition-all',
-                  settingsSubTab === 'business' ? 'bg-[#0066CC] text-white shadow-xs' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                  'h-9 px-3.5 rounded-xl text-xs font-bold cursor-pointer transition-colors',
+                  settingsSubTab === 'business' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
                 ]"
                 @click="settingsSubTab = 'business'"
               >
@@ -1798,8 +1808,8 @@ const selectTab = (id) => {
               <button
                 type="button"
                 :class="[
-                  'h-9 px-4 rounded-xl text-xs font-bold cursor-pointer transition-all',
-                  settingsSubTab === 'smtp' ? 'bg-[#0066CC] text-white shadow-xs' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                  'h-9 px-3.5 rounded-xl text-xs font-bold cursor-pointer transition-colors',
+                  settingsSubTab === 'smtp' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
                 ]"
                 @click="settingsSubTab = 'smtp'"
               >
@@ -1807,141 +1817,8 @@ const selectTab = (id) => {
               </button>
             </div>
 
-            <!-- SUB-TAB 1: LOGO, BRANDING & STORE PROFILE -->
-            <div v-if="settingsSubTab === 'general'" class="space-y-5">
-            <!-- Logo & Branding Upload -->
-            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
-              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.brandingTitle }}</h2>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <!-- Logo Upload -->
-                <div class="space-y-2.5">
-                  <label class="block text-xs font-bold text-[#1D1D1F]">{{ t.uploadLogo }}</label>
-                  <div class="flex items-center gap-3">
-                    <div
-                      class="h-16 w-16 rounded-2xl border border-[#E5E5EA] bg-[#F5F5F7] overflow-hidden flex items-center justify-center shrink-0 font-extrabold text-sm text-white"
-                      :style="{ backgroundColor: store.logoUrl ? '#F5F5F7' : (store.brandColor || '#0066CC') }"
-                    >
-                      <img v-if="store.logoUrl" :src="store.logoUrl" :alt="store.name" class="h-full w-full object-cover" />
-                      <span v-else>SP</span>
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                      <label class="h-9 px-3.5 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer">
-                        <Upload :size="13" />
-                        <span>{{ t.uploadLogo }}</span>
-                        <input type="file" accept="image/*" class="hidden" @change="handleImageUpload($event, 'logo')" />
-                      </label>
-                      <button
-                        v-if="store.logoUrl"
-                        type="button"
-                        class="h-9 px-3 rounded-full bg-rose-50 text-rose-600 text-xs font-semibold cursor-pointer"
-                        @click="store.logoUrl = ''; showToast(t.savedToast)"
-                      >
-                        {{ t.remove }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Brand Color -->
-                <div class="space-y-2.5">
-                  <label class="block text-xs font-bold text-[#1D1D1F]">{{ t.brandColor }}</label>
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <button
-                      v-for="clr in ['#0066CC', '#1D1D1F', '#059669', '#DC2626', '#D97706']"
-                      :key="clr"
-                      type="button"
-                      class="h-8 w-8 rounded-full border-2 cursor-pointer transition-transform"
-                      :class="store.brandColor === clr ? 'border-[#1D1D1F] scale-110' : 'border-white'"
-                      :style="{ backgroundColor: clr }"
-                      @click="store.brandColor = clr; showToast(t.savedToast)"
-                    />
-                    <input
-                      v-model="store.brandColor"
-                      type="color"
-                      class="h-8 w-10 rounded-lg border border-[#E5E5EA] bg-white cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                <!-- Cover Banner Upload -->
-                <div class="sm:col-span-2 space-y-2.5">
-                  <label class="block text-xs font-bold text-[#1D1D1F]">{{ t.uploadBanner }}</label>
-                  <div v-if="store.bannerUrl" class="relative h-32 w-full rounded-2xl overflow-hidden border border-[#E5E5EA] bg-[#F5F5F7]">
-                    <img :src="store.bannerUrl" :alt="store.name" class="h-full w-full object-cover" />
-                    <button
-                      type="button"
-                      class="absolute top-2 right-2 h-8 px-3 rounded-full bg-black/70 text-white text-xs font-semibold cursor-pointer"
-                      @click="store.bannerUrl = ''; showToast(t.savedToast)"
-                    >
-                      {{ t.remove }}
-                    </button>
-                  </div>
-                  <label class="h-10 px-4 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer">
-                    <Upload :size="14" />
-                    <span>{{ t.uploadBanner }}</span>
-                    <input type="file" accept="image/*" class="hidden" @change="handleImageUpload($event, 'banner')" />
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <!-- SUB-TAB 2: Country, Storefront Languages & Currency -->
-            <div v-if="settingsSubTab === 'locale'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
-              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.countryCurrencyTitle }}</h2>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.country }}</label>
-                  <select
-                    :value="store.country"
-                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
-                    @change="onCountryChange($event.target.value)"
-                  >
-                    <option v-for="c in STORE_COUNTRIES" :key="c.id" :value="c.id">{{ c.name }}</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.currency }}</label>
-                  <select
-                    v-model="store.currency"
-                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
-                  >
-                    <option value="SEK">SEK</option>
-                    <option value="NOK">NOK</option>
-                    <option value="DKK">DKK</option>
-                    <option value="EUR">EUR</option>
-                  </select>
-                </div>
-                <div class="sm:col-span-2 space-y-2">
-                  <label class="block text-xs font-bold text-[#1D1D1F]">{{ t.storefrontLangs }}</label>
-                  <div class="flex flex-wrap gap-2">
-                    <button
-                      v-for="l in SELLER_LANGUAGES"
-                      :key="l.code"
-                      type="button"
-                      :class="[
-                        'h-9 px-3.5 rounded-full text-xs font-semibold border cursor-pointer transition-colors',
-                        store.storefrontLangs.includes(l.code)
-                          ? 'bg-[#0066CC] text-white border-[#0066CC]'
-                          : 'bg-[#F5F5F7] text-[#515154] border-[#E5E5EA]'
-                      ]"
-                      @click="toggleStorefrontLang(l.code)"
-                    >
-                      {{ l.flag }} {{ l.label }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-                @click="showToast(t.savedToast)"
-              >
-                {{ t.save }}
-              </button>
-            </div>
-
-            <!-- General Store & Business Type Selector -->
-            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+            <!-- SUB-TAB 1: Store Profile -->
+            <div v-if="settingsSubTab === 'profile'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
               <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navSettings }}</h2>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -2019,9 +1896,139 @@ const selectTab = (id) => {
                 {{ t.save }}
               </button>
             </div>
+
+            <!-- SUB-TAB 2: Logo & Branding Upload -->
+            <div v-if="settingsSubTab === 'branding'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.brandingTitle }}</h2>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <!-- Logo Upload -->
+                <div class="space-y-2.5">
+                  <label class="block text-xs font-bold text-[#1D1D1F]">{{ t.uploadLogo }}</label>
+                  <div class="flex items-center gap-3">
+                    <div
+                      class="h-16 w-16 rounded-2xl border border-[#E5E5EA] bg-[#F5F5F7] overflow-hidden flex items-center justify-center shrink-0 font-extrabold text-sm text-white"
+                      :style="{ backgroundColor: store.logoUrl ? '#F5F5F7' : (store.brandColor || '#0066CC') }"
+                    >
+                      <img v-if="store.logoUrl" :src="store.logoUrl" :alt="store.name" class="h-full w-full object-cover" />
+                      <span v-else>SP</span>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                      <label class="h-9 px-3.5 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer">
+                        <Upload :size="13" />
+                        <span>{{ t.uploadLogo }}</span>
+                        <input type="file" accept="image/*" class="hidden" @change="handleImageUpload($event, 'logo')" />
+                      </label>
+                      <button
+                        v-if="store.logoUrl"
+                        type="button"
+                        class="h-9 px-3 rounded-full bg-rose-50 text-rose-600 text-xs font-semibold cursor-pointer"
+                        @click="store.logoUrl = ''; showToast(t.savedToast)"
+                      >
+                        {{ t.remove }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Brand Color -->
+                <div class="space-y-2.5">
+                  <label class="block text-xs font-bold text-[#1D1D1F]">{{ t.brandColor }}</label>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <button
+                      v-for="clr in ['#0066CC', '#1D1D1F', '#059669', '#DC2626', '#D97706']"
+                      :key="clr"
+                      type="button"
+                      class="h-8 w-8 rounded-full border-2 cursor-pointer transition-transform"
+                      :class="store.brandColor === clr ? 'border-[#1D1D1F] scale-110' : 'border-white'"
+                      :style="{ backgroundColor: clr }"
+                      @click="store.brandColor = clr; showToast(t.savedToast)"
+                    />
+                    <input
+                      v-model="store.brandColor"
+                      type="color"
+                      class="h-8 w-10 rounded-lg border border-[#E5E5EA] bg-white cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <!-- Cover Banner Upload -->
+                <div class="sm:col-span-2 space-y-2.5">
+                  <label class="block text-xs font-bold text-[#1D1D1F]">{{ t.uploadBanner }}</label>
+                  <div v-if="store.bannerUrl" class="relative h-32 w-full rounded-2xl overflow-hidden border border-[#E5E5EA] bg-[#F5F5F7]">
+                    <img :src="store.bannerUrl" :alt="store.name" class="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      class="absolute top-2 right-2 h-8 px-3 rounded-full bg-black/70 text-white text-xs font-semibold cursor-pointer"
+                      @click="store.bannerUrl = ''; showToast(t.savedToast)"
+                    >
+                      {{ t.remove }}
+                    </button>
+                  </div>
+                  <label class="h-10 px-4 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer">
+                    <Upload :size="14" />
+                    <span>{{ t.uploadBanner }}</span>
+                    <input type="file" accept="image/*" class="hidden" @change="handleImageUpload($event, 'banner')" />
+                  </label>
+                </div>
+              </div>
             </div>
 
-            <!-- SUB-TAB 3: Conditional Business-Specific Settings (Restaurant OR Online Shop ONLY) -->
+            <!-- SUB-TAB 3: Country, Storefront Languages & Currency -->
+            <div v-if="settingsSubTab === 'locale'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.countryCurrencyTitle }}</h2>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.country }}</label>
+                  <select
+                    :value="store.country"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
+                    @change="onCountryChange($event.target.value)"
+                  >
+                    <option v-for="c in STORE_COUNTRIES" :key="c.id" :value="c.id">{{ c.name }}</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.currency }}</label>
+                  <select
+                    v-model="store.currency"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
+                  >
+                    <option value="SEK">SEK</option>
+                    <option value="NOK">NOK</option>
+                    <option value="DKK">DKK</option>
+                    <option value="EUR">EUR</option>
+                  </select>
+                </div>
+                <div class="sm:col-span-2 space-y-2">
+                  <label class="block text-xs font-bold text-[#1D1D1F]">{{ t.storefrontLangs }}</label>
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      v-for="l in SELLER_LANGUAGES"
+                      :key="l.code"
+                      type="button"
+                      :class="[
+                        'h-9 px-3.5 rounded-full text-xs font-semibold border cursor-pointer transition-colors',
+                        store.storefrontLangs.includes(l.code)
+                          ? 'bg-[#0066CC] text-white border-[#0066CC]'
+                          : 'bg-[#F5F5F7] text-[#515154] border-[#E5E5EA]'
+                      ]"
+                      @click="toggleStorefrontLang(l.code)"
+                    >
+                      {{ l.flag }} {{ l.label }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+                @click="showToast(t.savedToast)"
+              >
+                {{ t.save }}
+              </button>
+            </div>
+
+            <!-- SUB-TAB 4: Conditional Business-Specific Settings (Restaurant OR Online Shop ONLY) -->
             <div v-if="settingsSubTab === 'business'">
             <div v-if="store.type === 'restaurant'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
               <h3 class="text-base font-extrabold text-[#1D1D1F]">{{ t.restaurantSettings }}</h3>
