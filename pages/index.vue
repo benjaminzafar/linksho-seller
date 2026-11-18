@@ -16,12 +16,14 @@ import {
   Pencil,
   CheckCircle2,
   Globe,
-  Store,
   TrendingUp,
   Clock,
   Lock,
   Phone,
   MapPin,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ExternalLink,
 } from 'lucide-vue-next';
 import { SELLER_LANGUAGES, TRANSLATIONS } from '~/utils/i18n';
 
@@ -30,6 +32,7 @@ const STORAGE_KEY = 'seller_pannel_v2';
 const lang = ref('en');
 const activeTab = ref('overview'); // 'overview' | 'orders' | 'products' | 'customers' | 'telegram' | 'payments' | 'settings'
 const mobileNavOpen = ref(false);
+const sidebarCollapsed = ref(false);
 const searchQuery = ref('');
 const orderFilter = ref('all');
 const categoryFilter = ref('all');
@@ -362,11 +365,14 @@ const deleteProduct = (id) => {
   showToast(t.value.savedToast);
 };
 
-const navItems = computed(() => [
+const primaryNav = computed(() => [
   { id: 'overview', label: t.value.navOverview, icon: LayoutDashboard },
   { id: 'orders', label: t.value.navOrders, icon: ShoppingBag, badge: activeOrdersCount.value },
   { id: 'products', label: t.value.navProducts, icon: Package, badge: products.value.length },
   { id: 'customers', label: t.value.navCustomers, icon: Users, badge: customersList.value.length },
+]);
+
+const setupNav = computed(() => [
   { id: 'telegram', label: t.value.navTelegram, icon: Send },
   { id: 'payments', label: t.value.navPayments, icon: CreditCard },
   { id: 'settings', label: t.value.navSettings, icon: Settings },
@@ -399,21 +405,34 @@ const selectTab = (id) => {
     <!-- Sidebar -->
     <aside
       :class="[
-        'fixed inset-y-0 left-0 z-50 w-64 bg-[#111214] text-white flex flex-col justify-between transition-transform duration-200 lg:static lg:translate-x-0',
+        'fixed inset-y-0 left-0 z-50 bg-[#111214] text-white flex flex-col justify-between transition-all duration-200 lg:static lg:translate-x-0 shrink-0 border-r border-white/[0.06]',
+        sidebarCollapsed ? 'lg:w-[74px] w-64' : 'w-64',
         mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
       ]"
     >
-      <div class="p-5 space-y-6">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="h-9 w-9 rounded-xl bg-[#0066CC] flex items-center justify-center font-extrabold text-xs">
+      <div :class="['space-y-5', sidebarCollapsed ? 'lg:px-3 lg:py-5 p-5' : 'p-5']">
+        <!-- Brand & Collapse Toggle -->
+        <div :class="['flex items-center', sidebarCollapsed ? 'lg:justify-center justify-between' : 'justify-between']">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="h-9 w-9 rounded-xl bg-[#0066CC] flex items-center justify-center font-extrabold text-xs shrink-0 shadow-sm">
               SP
             </div>
-            <div>
-              <div class="text-sm font-bold tracking-tight">Seller pannel</div>
-              <div class="text-[11px] text-white/50">{{ t.brandSub }}</div>
+            <div v-if="!sidebarCollapsed" class="min-w-0">
+              <div class="text-sm font-bold tracking-tight truncate">Seller pannel</div>
+              <div class="text-[11px] text-white/50 truncate">{{ t.brandSub }}</div>
             </div>
           </div>
+
+          <button
+            type="button"
+            class="hidden lg:flex h-8 w-8 rounded-lg items-center justify-center text-white/55 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer shrink-0"
+            :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+            @click="sidebarCollapsed = !sidebarCollapsed"
+          >
+            <PanelLeftOpen v-if="sidebarCollapsed" :size="16" />
+            <PanelLeftClose v-else :size="16" />
+          </button>
+
           <button
             type="button"
             class="lg:hidden p-1.5 rounded-lg text-white/70 hover:text-white"
@@ -423,37 +442,53 @@ const selectTab = (id) => {
           </button>
         </div>
 
+        <!-- Store Open / Closed Switch -->
         <button
           type="button"
-          class="w-full rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 px-3.5 py-2.5 flex items-center justify-between text-xs font-semibold transition-colors cursor-pointer"
+          :title="store.isOpen ? t.storeOpen : t.storeClosed"
+          :class="[
+            'w-full rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 py-2.5 flex items-center text-xs font-semibold transition-colors cursor-pointer',
+            sidebarCollapsed ? 'lg:justify-center lg:px-0 px-3.5 justify-between' : 'px-3.5 justify-between'
+          ]"
           @click="store.isOpen = !store.isOpen; showToast(t.savedToast)"
         >
           <span class="flex items-center gap-2">
-            <span :class="['h-2 w-2 rounded-full', store.isOpen ? 'bg-emerald-400' : 'bg-rose-400']" />
-            <span>{{ store.isOpen ? t.storeOpen : t.storeClosed }}</span>
+            <span :class="['h-2 w-2 rounded-full shrink-0', store.isOpen ? 'bg-emerald-400' : 'bg-rose-400']" />
+            <span v-if="!sidebarCollapsed">{{ store.isOpen ? t.storeOpen : t.storeClosed }}</span>
           </span>
-          <Store :size="14" class="text-white/60" />
+          <span
+            v-if="!sidebarCollapsed"
+            :class="[
+              'w-8 h-4.5 rounded-full p-0.5 transition-colors flex items-center',
+              store.isOpen ? 'bg-emerald-500 justify-end' : 'bg-white/20 justify-start'
+            ]"
+          >
+            <span class="h-3.5 w-3.5 rounded-full bg-white shadow-xs block" />
+          </span>
         </button>
 
+        <!-- Primary Navigation Group -->
         <nav class="space-y-1">
           <button
-            v-for="item in navItems"
+            v-for="item in primaryNav"
             :key="item.id"
             type="button"
+            :title="sidebarCollapsed ? item.label : undefined"
             :class="[
-              'w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer',
+              'w-full flex items-center rounded-xl text-xs font-semibold transition-all cursor-pointer relative',
+              sidebarCollapsed ? 'lg:justify-center lg:px-0 lg:py-2.5 px-3.5 py-2.5 justify-between' : 'px-3.5 py-2.5 justify-between',
               activeTab === item.id
-                ? 'bg-white text-[#1D1D1F]'
+                ? 'bg-white text-[#1D1D1F] shadow-xs'
                 : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
             ]"
             @click="selectTab(item.id)"
           >
             <span class="flex items-center gap-2.5">
-              <component :is="item.icon" :size="16" />
-              <span>{{ item.label }}</span>
+              <component :is="item.icon" :size="16" class="shrink-0" />
+              <span v-if="!sidebarCollapsed">{{ item.label }}</span>
             </span>
             <span
-              v-if="item.badge !== undefined"
+              v-if="item.badge !== undefined && !sidebarCollapsed"
               :class="[
                 'px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums',
                 activeTab === item.id ? 'bg-[#0066CC] text-white' : 'bg-white/10 text-white/80'
@@ -463,14 +498,49 @@ const selectTab = (id) => {
             </span>
           </button>
         </nav>
+
+        <!-- Divider -->
+        <div class="border-t border-white/[0.08] pt-3">
+          <nav class="space-y-1">
+            <button
+              v-for="item in setupNav"
+              :key="item.id"
+              type="button"
+              :title="sidebarCollapsed ? item.label : undefined"
+              :class="[
+                'w-full flex items-center rounded-xl text-xs font-semibold transition-all cursor-pointer',
+                sidebarCollapsed ? 'lg:justify-center lg:px-0 lg:py-2.5 px-3.5 py-2.5 justify-between' : 'px-3.5 py-2.5 justify-between',
+                activeTab === item.id
+                  ? 'bg-white text-[#1D1D1F] shadow-xs'
+                  : 'text-white/70 hover:text-white hover:bg-white/[0.07]'
+              ]"
+              @click="selectTab(item.id)"
+            >
+              <span class="flex items-center gap-2.5">
+                <component :is="item.icon" :size="16" class="shrink-0" />
+                <span v-if="!sidebarCollapsed">{{ item.label }}</span>
+              </span>
+            </button>
+          </nav>
+        </div>
       </div>
 
-      <div class="p-5 border-t border-white/10 space-y-1.5 text-[11px] text-white/60">
-        <div class="flex items-center gap-1.5 text-emerald-400 font-semibold">
+      <!-- Footer Domain & SSL -->
+      <div :class="['border-t border-white/[0.08] text-[11px] text-white/60', sidebarCollapsed ? 'lg:p-3 p-5 flex justify-center' : 'p-5 space-y-2']">
+        <a
+          :href="`https://${store.customDomain}`"
+          target="_blank"
+          rel="noopener noreferrer"
+          :title="store.customDomain"
+          class="flex items-center justify-between gap-2 text-white/80 hover:text-white transition-colors"
+        >
+          <span v-if="!sidebarCollapsed" class="truncate font-mono">{{ store.customDomain }}</span>
+          <ExternalLink :size="13" class="shrink-0 text-white/55" />
+        </a>
+        <div v-if="!sidebarCollapsed" class="flex items-center gap-1.5 text-emerald-400 font-semibold">
           <Lock :size="12" />
           <span>{{ t.sslActive }}</span>
         </div>
-        <div class="truncate font-mono text-white/80">{{ store.customDomain }}</div>
       </div>
     </aside>
 
