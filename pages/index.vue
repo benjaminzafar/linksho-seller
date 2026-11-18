@@ -35,22 +35,29 @@ import {
   Rocket,
   Terminal,
   Copy,
+  BarChart3,
+  Download,
+  Check,
+  XCircle,
 } from 'lucide-vue-next';
 import { SELLER_LANGUAGES, TRANSLATIONS } from '~/utils/i18n';
 
-const STORAGE_KEY = 'seller_pannel_v3';
-const LEGACY_STORAGE_KEY = 'seller_pannel_v2';
+const STORAGE_KEY = 'seller_pannel_v4';
+const LEGACY_STORAGE_KEY = 'seller_pannel_v3';
 
 const lang = ref('en');
-const activeTab = ref('overview'); // 'overview' | 'orders' | 'products' | 'customers' | 'telegram' | 'payments' | 'settings'
+const activeTab = ref('orders'); // 'orders' | 'menu' | 'delivery' | 'reports' | 'settings'
 const mobileNavOpen = ref(false);
 const sidebarCollapsed = ref(false);
-const settingsSubTab = ref('profile'); // 'profile' | 'branding' | 'locale' | 'business' | 'smtp'
+const settingsSubTab = ref('profile'); // 'profile' | 'telegram' | 'smtp' | 'delivery_payments' | 'install'
 const searchQuery = ref('');
 const orderFilter = ref('all');
 const orderTypeFilter = ref('all'); // 'all' | 'Delivery' | 'Pickup'
 const categoryFilter = ref('all');
 const selectedOrderId = ref('');
+const acceptingOrderId = ref('');
+const customPrepMinutes = ref('35');
+const reportPeriod = ref('month'); // 'month' | '6months' | 'year'
 const toastMsg = ref('');
 
 const STORE_COUNTRIES = [
@@ -149,22 +156,28 @@ let zoneLayerGroup = null;
 let draftLayerGroup = null;
 
 const restaurantConfig = ref({
-  prepTime: 25,
+  prepTime: 30,
   minOrder: 150,
+  maxDeliveryKm: 10,
   openingHours: 'Mon-Sun 11:00 - 22:00',
   pickupEnabled: true,
   deliveryEnabled: true,
-  dineInEnabled: false,
 });
+
+const categories = ref(['Main Course', 'Sides', 'Desserts', 'Drinks']);
+const newCategoryName = ref('');
 
 const installation = ref({
   installed: false,
+  setupCompleted: false,
   workerUrl: '',
   apiKey: '',
   pinCode: '',
   installedAt: '',
 });
 
+const showSetupWizard = ref(false);
+const wizardStep = ref(1);
 const installStep = ref(1);
 const installDeploying = ref(false);
 const installError = ref('');
@@ -186,6 +199,8 @@ const products = ref([
   { id: 'PRD-105', name: 'Sparkling Mint Drink', category: 'Drinks', price: 35, available: false, description: '500ml bottle', image: '' },
 ]);
 
+const daysAgoIso = (days) => new Date(Date.now() - days * 86400000).toISOString();
+
 const orders = ref([
   {
     id: 'ORD-4821',
@@ -202,13 +217,16 @@ const orders = ref([
     total: 422,
     payment: 'Stripe',
     status: 'pending',
+    prepMinutes: null,
+    estimatedReadyAt: '',
     time: '4m ago',
+    createdAt: daysAgoIso(0),
   },
   {
     id: 'ORD-4820',
     customer: 'Oskar Bergström',
     phone: '+46 73 882 10 44',
-    address: 'Pickup at store',
+    address: 'Takeaway at restaurant',
     deliveryType: 'Pickup',
     lines: [
       { name: 'Chicken Skewers', qty: 1, price: 149 },
@@ -219,7 +237,10 @@ const orders = ref([
     total: 214,
     payment: 'Stripe',
     status: 'preparing',
+    prepMinutes: 30,
+    estimatedReadyAt: '19:10',
     time: '18m ago',
+    createdAt: daysAgoIso(0),
   },
   {
     id: 'ORD-4819',
@@ -233,13 +254,16 @@ const orders = ref([
     total: 526,
     payment: 'Stripe',
     status: 'ready',
+    prepMinutes: 40,
+    estimatedReadyAt: '18:55',
     time: '32m ago',
+    createdAt: daysAgoIso(2),
   },
   {
     id: 'ORD-4818',
     customer: 'Lukas Nyström',
     phone: '+46 72 904 55 18',
-    address: 'Pickup at store',
+    address: 'Takeaway at restaurant',
     deliveryType: 'Pickup',
     lines: [{ name: 'Grilled Lamb Plate', qty: 2, price: 169 }],
     subtotal: 338,
@@ -247,7 +271,44 @@ const orders = ref([
     total: 338,
     payment: 'Stripe',
     status: 'delivered',
-    time: '1h ago',
+    prepMinutes: 30,
+    estimatedReadyAt: '18:10',
+    time: '3 days ago',
+    createdAt: daysAgoIso(3),
+  },
+  {
+    id: 'ORD-4710',
+    customer: 'Emma Lindqvist',
+    phone: '+46 70 441 12 90',
+    address: 'Kungsgatan 18, Stockholm',
+    deliveryType: 'Delivery',
+    lines: [{ name: 'Grilled Lamb Plate', qty: 4, price: 169 }],
+    subtotal: 676,
+    shipping: 49,
+    total: 725,
+    payment: 'Stripe',
+    status: 'delivered',
+    prepMinutes: 40,
+    estimatedReadyAt: '20:15',
+    time: '3 months ago',
+    createdAt: daysAgoIso(92),
+  },
+  {
+    id: 'ORD-4502',
+    customer: 'Maja Ekström',
+    phone: '+46 70 998 11 22',
+    address: 'Sveavägen 90, Stockholm',
+    deliveryType: 'Delivery',
+    lines: [{ name: 'Chicken Skewers', qty: 5, price: 149 }],
+    subtotal: 745,
+    shipping: 49,
+    total: 794,
+    payment: 'Stripe',
+    status: 'delivered',
+    prepMinutes: 60,
+    estimatedReadyAt: '19:45',
+    time: '8 months ago',
+    createdAt: daysAgoIso(240),
   },
 ]);
 
@@ -291,13 +352,14 @@ const buildDefaultGothenburgPanel = () => ({
     receiptNote: 'Tack för din beställning!',
   },
   restaurantConfig: {
-    prepTime: 20,
+    prepTime: 30,
     minOrder: 120,
+    maxDeliveryKm: 8,
     openingHours: 'Mon-Sun 11:00 - 23:00',
     pickupEnabled: true,
     deliveryEnabled: true,
-    dineInEnabled: true,
   },
+  categories: ['Main Course', 'Sides', 'Drinks'],
   shippingZones: [
     {
       id: 'ZN-G1',
@@ -364,6 +426,7 @@ const restaurantPanels = ref([
     store: cloneData(store.value),
     restaurantConfig: cloneData(restaurantConfig.value),
     shippingZones: cloneData(shippingZones.value),
+    categories: cloneData(categories.value),
     products: cloneData(products.value),
     orders: cloneData(orders.value),
     coupons: cloneData(coupons.value),
@@ -384,6 +447,7 @@ const syncCurrentPanelToList = () => {
     store: cloneData({ ...store.value, type: 'restaurant' }),
     restaurantConfig: cloneData(restaurantConfig.value),
     shippingZones: cloneData(shippingZones.value),
+    categories: cloneData(categories.value),
     products: cloneData(products.value),
     orders: cloneData(orders.value),
     coupons: cloneData(coupons.value),
@@ -403,6 +467,7 @@ const loadPanelIntoRefs = (panel) => {
   store.value = cloneData({ ...panel.store, type: 'restaurant' });
   restaurantConfig.value = cloneData(panel.restaurantConfig);
   shippingZones.value = cloneData(panel.shippingZones || []);
+  categories.value = cloneData(panel.categories || ['Main Course', 'Sides', 'Desserts', 'Drinks']);
   products.value = cloneData(panel.products || []);
   orders.value = cloneData(panel.orders || []);
   coupons.value = cloneData(panel.coupons || []);
@@ -424,8 +489,8 @@ const switchRestaurantPanel = (id) => {
   if (!target) return;
   activePanelId.value = id;
   loadPanelIntoRefs(target);
-  if (activeTab.value === 'shipping') {
-    setTimeout(() => renderMapZones(), 60);
+  if (activeTab.value === 'delivery') {
+    setTimeout(() => initDeliveryMap(), 60);
   }
   showToast(`${target.store.name}`);
 };
@@ -459,14 +524,15 @@ const createRestaurantPanel = () => {
       receiptNote: 'Thank you for your order!',
     },
     restaurantConfig: {
-      prepTime: 25,
+      prepTime: 30,
       minOrder: 150,
+      maxDeliveryKm: 10,
       openingHours: 'Mon-Sun 11:00 - 22:00',
       pickupEnabled: true,
       deliveryEnabled: true,
-      dineInEnabled: false,
     },
     shippingZones: [],
+    categories: ['Main Course', 'Sides', 'Desserts', 'Drinks'],
     products: [],
     orders: [],
     coupons: [],
@@ -480,8 +546,9 @@ const createRestaurantPanel = () => {
   loadPanelIntoRefs(newPanel);
   newRestaurantForm.value = { name: '', country: 'se', phone: '', address: '' };
   showNewRestaurantModal.value = false;
-  activeTab.value = 'install';
-  installStep.value = 1;
+  activeTab.value = 'orders';
+  wizardStep.value = 1;
+  showSetupWizard.value = true;
   showToast(cleanName);
 };
 
@@ -540,6 +607,18 @@ const deployPanelToCloudflare = async () => {
   }
 };
 
+const openSetupWizard = () => {
+  wizardStep.value = 1;
+  showSetupWizard.value = true;
+};
+
+const finishSetupWizard = () => {
+  installation.value = { ...installation.value, setupCompleted: true };
+  showSetupWizard.value = false;
+  activeTab.value = 'orders';
+  showToast(`${store.value.name} is ready!`);
+};
+
 const showToast = (msg) => {
   toastMsg.value = msg;
   setTimeout(() => {
@@ -560,9 +639,15 @@ onMounted(() => {
           : parsed.restaurantPanels[0].id;
         activePanelId.value = targetId;
         loadPanelIntoRefs(parsed.restaurantPanels.find((p) => p.id === targetId));
+        if (!installation.value.setupCompleted) {
+          wizardStep.value = 1;
+          showSetupWizard.value = true;
+        }
       }
       return;
     }
+    wizardStep.value = 1;
+    showSetupWizard.value = true;
     const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
     if (legacy) {
       const parsed = JSON.parse(legacy);
@@ -582,7 +667,7 @@ onMounted(() => {
 });
 
 watch(
-  [lang, activePanelId, store, stripeConfig, telegramConfig, smtpConfig, shippingZones, coupons, restaurantConfig, products, orders, installation],
+  [lang, activePanelId, store, stripeConfig, telegramConfig, smtpConfig, shippingZones, categories, coupons, restaurantConfig, products, orders, installation],
   () => {
     if (isSwitchingPanel.value) return;
     try {
@@ -648,7 +733,7 @@ const selectedOrder = computed(() =>
 );
 
 const productCategories = computed(() => {
-  const set = new Set(products.value.map((p) => p.category).filter(Boolean));
+  const set = new Set([...categories.value, ...products.value.map((p) => p.category).filter(Boolean)]);
   return ['all', ...Array.from(set)];
 });
 
@@ -698,7 +783,7 @@ const statusLabel = (status) => {
     preparing: t.value.statusPreparing,
     ready: t.value.statusReady,
     delivered: t.value.statusDelivered,
-    cancelled: t.value.statusCancelled,
+    cancelled: t.value.statusRejected || t.value.statusCancelled,
   };
   return map[status] || status;
 };
@@ -706,6 +791,122 @@ const statusLabel = (status) => {
 const updateOrderStatus = (orderId, nextStatus) => {
   orders.value = orders.value.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o));
   showToast(t.value.savedToast);
+};
+
+const acceptOrderWithPrep = (orderId, minutes) => {
+  const mins = Math.max(5, Math.min(240, Number(minutes) || 30));
+  const readyDate = new Date(Date.now() + mins * 60000);
+  const readyStr = readyDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  orders.value = orders.value.map((o) =>
+    o.id === orderId
+      ? { ...o, status: 'preparing', prepMinutes: mins, estimatedReadyAt: readyStr }
+      : o
+  );
+  acceptingOrderId.value = '';
+  showToast(`${t.value.acceptOrder} • ${mins} min (${readyStr})`);
+};
+
+const rejectOrder = (orderId) => {
+  orders.value = orders.value.map((o) =>
+    o.id === orderId ? { ...o, status: 'cancelled', prepMinutes: null, estimatedReadyAt: '' } : o
+  );
+  acceptingOrderId.value = '';
+  showToast(t.value.statusRejected || 'Rejected');
+};
+
+const addCategory = () => {
+  const clean = newCategoryName.value.trim();
+  if (!clean || categories.value.includes(clean)) return;
+  categories.value = [...categories.value, clean];
+  newCategoryName.value = '';
+  showToast(t.value.savedToast);
+};
+
+const deleteCategory = (catName) => {
+  if (categories.value.length <= 1) return;
+  categories.value = categories.value.filter((c) => c !== catName);
+  if (categoryFilter.value === catName) categoryFilter.value = 'all';
+  showToast(t.value.savedToast);
+};
+
+const reportPeriodStats = computed(() => {
+  const daysMap = { month: 30, '6months': 180, year: 365 };
+  const maxDays = daysMap[reportPeriod.value] || 30;
+  const cutoff = Date.now() - maxDays * 86400000;
+  const validOrders = orders.value.filter((o) => {
+    if (o.status === 'cancelled') return false;
+    const ts = o.createdAt ? new Date(o.createdAt).getTime() : Date.now();
+    return ts >= cutoff;
+  });
+  const revenue = validOrders.reduce((s, o) => s + Number(o.total || 0), 0);
+  const ordersCount = validOrders.length;
+  const avgOrder = ordersCount ? Math.round(revenue / ordersCount) : 0;
+  const uniqueCustomers = new Set(validOrders.map((o) => o.phone || o.customer)).size;
+  return { revenue, ordersCount, avgOrder, uniqueCustomers, filteredOrders: validOrders };
+});
+
+const bestSellingFoods = computed(() => {
+  const map = new Map();
+  for (const o of orders.value) {
+    if (o.status === 'cancelled') continue;
+    for (const line of o.lines || []) {
+      const prev = map.get(line.name) || { name: line.name, qty: 0, revenue: 0 };
+      prev.qty += Number(line.qty || 1);
+      prev.revenue += Number(line.qty || 1) * Number(line.price || 0);
+      map.set(line.name, prev);
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.qty - a.qty);
+});
+
+const exportSalesToExcel = () => {
+  const headers = [
+    'Order ID',
+    'Date',
+    'Customer',
+    'Phone',
+    'Type',
+    'Address',
+    'Items',
+    'Subtotal',
+    'Delivery Fee',
+    'Total',
+    'Currency',
+    'Payment',
+    'Status',
+    'Prep Time (min)',
+    'Estimated Ready',
+  ];
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const rows = orders.value.map((o) => [
+    o.id,
+    o.createdAt ? new Date(o.createdAt).toISOString().slice(0, 10) : o.time,
+    o.customer,
+    o.phone,
+    o.deliveryType === 'Delivery' ? 'Delivery' : 'Takeaway',
+    o.address,
+    (o.lines || []).map((l) => `${l.qty}x ${l.name}`).join('; '),
+    o.subtotal,
+    o.shipping,
+    o.total,
+    store.value.currency,
+    o.payment,
+    o.status,
+    o.prepMinutes || '',
+    o.estimatedReadyAt || '',
+  ].map(esc).join(','));
+  const csv = '\uFEFF' + [headers.map(esc).join(','), ...rows].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const slug = store.value.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  a.href = url;
+  a.download = `sales-report-${slug}-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(t.value.exportExcel);
 };
 
 const openNewProductForm = () => {
@@ -779,6 +980,17 @@ const renderMapZones = () => {
   if (!L || !leafletMap || !zoneLayerGroup || !draftLayerGroup) return;
 
   zoneLayerGroup.clearLayers();
+  const centerLatLng = activePanelId.value === 'rest-gothenburg' ? [57.7089, 11.9746] : [59.3293, 18.0686];
+  const maxKm = Math.max(1, Number(restaurantConfig.value.maxDeliveryKm) || 10);
+  L.circle(centerLatLng, {
+    radius: maxKm * 1000,
+    color: '#0066CC',
+    dashArray: '6, 6',
+    fillColor: '#0066CC',
+    fillOpacity: 0.06,
+    weight: 1.5,
+  }).addTo(zoneLayerGroup).bindTooltip(`Max delivery radius: ${maxKm} km`);
+
   for (const z of shippingZones.value) {
     if (Array.isArray(z.points) && z.points.length >= 3) {
       const poly = L.polygon(z.points, {
@@ -840,7 +1052,7 @@ const initDeliveryMap = async () => {
 };
 
 watch(activeTab, (tab) => {
-  if (tab === 'shipping') {
+  if (tab === 'delivery') {
     setTimeout(initDeliveryMap, 80);
   }
 });
@@ -934,19 +1146,14 @@ const deleteCoupon = (id) => {
 };
 
 const primaryNav = computed(() => [
-  { id: 'overview', label: t.value.navOverview, icon: LayoutDashboard },
   { id: 'orders', label: t.value.navOrders, icon: ShoppingBag, badge: activeOrdersCount.value },
-  { id: 'products', label: t.value.navProducts, icon: Package, badge: products.value.length },
-  { id: 'customers', label: t.value.navCustomers, icon: Users, badge: customersList.value.length },
-  { id: 'coupons', label: t.value.navCoupons, icon: Tag, badge: coupons.value.length },
+  { id: 'menu', label: t.value.navMenu, icon: Utensils, badge: products.value.length },
+  { id: 'delivery', label: t.value.navDelivery, icon: Truck },
+  { id: 'reports', label: t.value.navReports, icon: BarChart3 },
 ]);
 
 const setupNav = computed(() => [
-  { id: 'shipping', label: t.value.navShipping, icon: Truck },
-  { id: 'telegram', label: t.value.navTelegram, icon: Send },
-  { id: 'payments', label: t.value.navPayments, icon: CreditCard },
   { id: 'settings', label: t.value.navSettings, icon: Settings },
-  { id: 'install', label: t.value.navInstall, icon: Rocket },
 ]);
 
 const selectTab = (id) => {
@@ -1188,7 +1395,7 @@ const selectTab = (id) => {
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                 : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
             ]"
-            @click="selectTab('install')"
+            @click="selectTab('settings'); settingsSubTab = 'install'"
           >
             <Rocket :size="13" :stroke-width="2" class="block" />
             <span>{{ installation.installed ? t.installComplete : t.installPending }}</span>
@@ -1211,173 +1418,22 @@ const selectTab = (id) => {
       </header>
 
       <main class="p-3 sm:p-4 lg:px-1 lg:pt-5 lg:pb-8 max-w-7xl w-full mx-auto space-y-5">
-        <!-- OVERVIEW TAB -->
-        <template v-if="activeTab === 'overview'">
-          <!-- Page Title Bar -->
+        <!-- 1. ORDERS TAB (HIGHEST PRIORITY) -->
+        <template v-if="activeTab === 'orders'">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h1 class="text-xl font-extrabold text-[#1D1D1F]">{{ store.name }}</h1>
+              <h1 class="text-xl font-extrabold text-[#1D1D1F]">{{ store.name }} — {{ t.navOrders }}</h1>
               <p class="text-xs text-[#6E6E73]">{{ store.address }}</p>
             </div>
-            <button
-              type="button"
-              class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold leading-none inline-flex items-center gap-1.5 cursor-pointer"
-              @click="activeTab = 'products'; openNewProductForm()"
-            >
-              <span class="flex h-4 w-4 items-center justify-center shrink-0">
-                <Plus :size="14" :stroke-width="2.2" class="block" />
+            <div class="flex items-center gap-2">
+              <span class="px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">
+                {{ orderCountsByStatus.pending }} {{ t.statusPending }}
               </span>
-              <span class="leading-none">{{ t.addProduct }}</span>
-            </button>
-          </div>
-
-          <!-- KPI Grid -->
-          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1.5">
-              <div class="flex items-center justify-between text-xs font-semibold leading-none text-[#6E6E73]">
-                <span class="leading-none">{{ t.kpiRevenue }}</span>
-                <span class="flex h-4 w-4 items-center justify-center shrink-0">
-                  <TrendingUp :size="15" :stroke-width="2" class="block text-[#0066CC]" />
-                </span>
-              </div>
-              <div class="text-2xl font-extrabold tabular-nums">
-                {{ totalRevenue.toLocaleString('en-US') }} {{ store.currency }}
-              </div>
-            </div>
-
-            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1.5">
-              <div class="flex items-center justify-between text-xs font-semibold leading-none text-[#6E6E73]">
-                <span class="leading-none">{{ t.kpiOrders }}</span>
-                <span class="flex h-4 w-4 items-center justify-center shrink-0">
-                  <Clock :size="15" :stroke-width="2" class="block text-amber-600" />
-                </span>
-              </div>
-              <div class="text-2xl font-extrabold tabular-nums">
-                {{ activeOrdersCount }}
-              </div>
-            </div>
-
-            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1.5">
-              <div class="flex items-center justify-between text-xs font-semibold leading-none text-[#6E6E73]">
-                <span class="leading-none">{{ t.kpiProducts }}</span>
-                <span class="flex h-4 w-4 items-center justify-center shrink-0">
-                  <Package :size="15" :stroke-width="2" class="block text-emerald-600" />
-                </span>
-              </div>
-              <div class="text-2xl font-extrabold tabular-nums">
-                {{ products.length }}
-              </div>
-            </div>
-
-            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1.5">
-              <div class="flex items-center justify-between text-xs font-semibold leading-none text-[#6E6E73]">
-                <span class="leading-none">{{ t.kpiAvgOrder }}</span>
-                <span class="flex h-4 w-4 items-center justify-center shrink-0">
-                  <CreditCard :size="15" :stroke-width="2" class="block text-[#0066CC]" />
-                </span>
-              </div>
-              <div class="text-2xl font-extrabold tabular-nums">
-                {{ avgOrderValue }} {{ store.currency }}
-              </div>
+              <span class="px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-[#0066CC] text-xs font-bold">
+                {{ activeOrdersCount }} Active
+              </span>
             </div>
           </div>
-
-          <!-- 7-Day Revenue Chart + Order Status Summary -->
-          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            <div class="lg:col-span-8 rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
-              <div class="flex items-center justify-between">
-                <h2 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.revenueChart }}</h2>
-                <span class="text-xs font-bold text-[#0066CC] tabular-nums">
-                  {{ totalRevenue.toLocaleString('en-US') }} {{ store.currency }}
-                </span>
-              </div>
-
-              <div class="h-44 flex items-end justify-between gap-2 sm:gap-3 pt-4">
-                <div
-                  v-for="d in weeklyRevenue"
-                  :key="d.day"
-                  class="flex-1 flex flex-col items-center gap-2 h-full justify-end group"
-                >
-                  <span class="text-[10px] font-bold text-[#6E6E73] opacity-0 group-hover:opacity-100 transition-opacity tabular-nums">
-                    {{ d.amount }}
-                  </span>
-                  <div class="w-full max-w-[38px] bg-[#F0F0F2] rounded-t-lg overflow-hidden flex items-end h-32">
-                    <div
-                      class="w-full bg-[#0066CC] group-hover:bg-[#0055AA] rounded-t-lg transition-all duration-300"
-                      :style="{ height: `${Math.max(10, Math.round((d.amount / maxChartAmount) * 100))}%` }"
-                    />
-                  </div>
-                  <span class="text-[11px] font-semibold text-[#6E6E73]">{{ d.day }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="lg:col-span-4 rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-3">
-              <h2 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.orderSummary }}</h2>
-              <div class="divide-y divide-[#E5E5EA] text-xs">
-                <div
-                  v-for="st in ['pending', 'preparing', 'ready', 'delivered']"
-                  :key="st"
-                  class="py-2.5 flex items-center justify-between"
-                >
-                  <span :class="['px-2.5 py-0.5 rounded-full text-[11px] font-bold border', statusBadgeClass(st)]">
-                    {{ statusLabel(st) }}
-                  </span>
-                  <span class="font-extrabold tabular-nums text-[#1D1D1F]">{{ orderCountsByStatus[st] }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Recent Orders -->
-          <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] overflow-hidden">
-            <div class="px-5 py-4 border-b border-[#E5E5EA] flex items-center justify-between">
-              <h2 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.recentOrders }}</h2>
-              <button
-                type="button"
-                class="text-xs font-bold text-[#0066CC] hover:underline cursor-pointer"
-                @click="activeTab = 'orders'"
-              >
-                {{ t.viewAll }} →
-              </button>
-            </div>
-            <div class="divide-y divide-[#E5E5EA]">
-              <button
-                v-for="ord in orders.slice(0, 4)"
-                :key="ord.id"
-                type="button"
-                class="w-full px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-left hover:bg-[#F5F5F7]/70 transition-colors cursor-pointer"
-                @click="selectedOrderId = ord.id; activeTab = 'orders'"
-              >
-                <div class="space-y-0.5">
-                  <div class="flex items-center gap-2">
-                    <span class="font-mono text-xs font-bold text-[#1D1D1F]">{{ ord.id }}</span>
-                    <span class="text-xs font-semibold text-[#1D1D1F]">{{ ord.customer }}</span>
-                    <span
-                      :class="[
-                        'px-2 py-0.5 rounded-full text-[10px] font-bold',
-                        ord.deliveryType === 'Delivery' ? 'bg-blue-50 text-[#0066CC]' : 'bg-emerald-50 text-emerald-700'
-                      ]"
-                    >
-                      {{ ord.deliveryType === 'Delivery' ? 'Delivery' : 'Takeaway' }}
-                    </span>
-                    <span class="text-[11px] text-[#86868B]">• {{ ord.time }}</span>
-                  </div>
-                  <p class="text-xs text-[#6E6E73]">{{ ord.lines.map((l) => `${l.qty}x ${l.name}`).join(', ') }}</p>
-                </div>
-                <div class="flex items-center gap-3">
-                  <span class="text-xs font-extrabold tabular-nums">{{ ord.total }} {{ store.currency }}</span>
-                  <span :class="['px-2.5 py-0.5 rounded-full text-[11px] font-bold border', statusBadgeClass(ord.status)]">
-                    {{ statusLabel(ord.status) }}
-                  </span>
-                </div>
-              </button>
-            </div>
-          </div>
-        </template>
-
-        <!-- ORDERS TAB -->
-        <template v-else-if="activeTab === 'orders'">
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             <div :class="[selectedOrder ? 'lg:col-span-7' : 'lg:col-span-12', 'rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4']">
               <div class="flex flex-wrap items-center justify-between gap-3">
@@ -1440,48 +1496,76 @@ const selectTab = (id) => {
                       <span :class="['px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border', statusBadgeClass(ord.status)]">
                         {{ statusLabel(ord.status) }}
                       </span>
+                      <span
+                        v-if="ord.prepMinutes && ord.status !== 'cancelled'"
+                        class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#F5F5F7] text-[#1D1D1F] border border-[#E5E5EA]"
+                      >
+                        ⏱ {{ ord.prepMinutes }} min{{ ord.estimatedReadyAt ? ` (${ord.estimatedReadyAt})` : '' }}
+                      </span>
                     </div>
                     <p class="text-xs text-[#515154]">{{ ord.lines.map((l) => `${l.qty}x ${l.name}`).join(', ') }}</p>
                     <p class="text-[11px] text-[#86868B]">{{ ord.address }} • {{ ord.payment }} • {{ ord.time }}</p>
                   </div>
 
-                  <div class="flex items-center gap-2 shrink-0" @click.stop>
-                    <span class="text-sm font-extrabold tabular-nums">{{ ord.total }} {{ store.currency }}</span>
-                    <button
-                      v-if="ord.status === 'pending'"
-                      type="button"
-                      class="h-9 px-3 rounded-xl bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-                      @click="updateOrderStatus(ord.id, 'preparing')"
+                  <div class="flex flex-col items-end gap-2 shrink-0" @click.stop>
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="text-sm font-extrabold tabular-nums">{{ ord.total }} {{ store.currency }}</span>
+                      <template v-if="ord.status === 'pending'">
+                        <button
+                          type="button"
+                          class="h-9 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                          @click="acceptingOrderId = acceptingOrderId === ord.id ? '' : ord.id"
+                        >
+                          <Check :size="14" />
+                          <span>{{ t.acceptOrder }}</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="h-9 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
+                          @click="rejectOrder(ord.id)"
+                        >
+                          <XCircle :size="14" />
+                          <span>{{ t.rejectOrder }}</span>
+                        </button>
+                      </template>
+                      <button
+                        v-else-if="ord.status === 'preparing'"
+                        type="button"
+                        class="h-9 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+                        @click="updateOrderStatus(ord.id, 'ready')"
+                      >
+                        {{ t.markReady }}
+                      </button>
+                      <button
+                        v-else-if="ord.status === 'ready'"
+                        type="button"
+                        class="h-9 px-3.5 rounded-xl bg-[#1D1D1F] hover:bg-black text-white text-xs font-bold cursor-pointer"
+                        @click="updateOrderStatus(ord.id, 'delivered')"
+                      >
+                        {{ t.markDelivered }}
+                      </button>
+                    </div>
+
+                    <!-- Inline Preparation Time Picker when Accepting -->
+                    <div
+                      v-if="ord.status === 'pending' && acceptingOrderId === ord.id"
+                      class="p-2.5 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] flex flex-wrap items-center gap-1.5"
                     >
-                      {{ t.markPreparing }}
-                    </button>
-                    <button
-                      v-else-if="ord.status === 'preparing'"
-                      type="button"
-                      class="h-9 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
-                      @click="updateOrderStatus(ord.id, 'ready')"
-                    >
-                      {{ t.markReady }}
-                    </button>
-                    <button
-                      v-else-if="ord.status === 'ready'"
-                      type="button"
-                      class="h-9 px-3 rounded-xl bg-[#1D1D1F] hover:bg-black text-white text-xs font-bold cursor-pointer"
-                      @click="updateOrderStatus(ord.id, 'delivered')"
-                    >
-                      {{ t.markDelivered }}
-                    </button>
-                    <select
-                      :value="ord.status"
-                      class="h-9 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] px-2.5 text-xs font-semibold cursor-pointer"
-                      @change="updateOrderStatus(ord.id, $event.target.value)"
-                    >
-                      <option value="pending">{{ t.statusPending }}</option>
-                      <option value="preparing">{{ t.statusPreparing }}</option>
-                      <option value="ready">{{ t.statusReady }}</option>
-                      <option value="delivered">{{ t.statusDelivered }}</option>
-                      <option value="cancelled">{{ t.statusCancelled }}</option>
-                    </select>
+                      <span class="text-[11px] font-bold text-[#1D1D1F] mr-1">{{ t.setPrepTime }}:</span>
+                      <button type="button" class="h-7 px-2.5 rounded-lg bg-white hover:bg-[#0066CC] hover:text-white border border-[#D2D2D7] text-[11px] font-bold cursor-pointer" @click="acceptOrderWithPrep(ord.id, 30)">{{ t.prep30 }}</button>
+                      <button type="button" class="h-7 px-2.5 rounded-lg bg-white hover:bg-[#0066CC] hover:text-white border border-[#D2D2D7] text-[11px] font-bold cursor-pointer" @click="acceptOrderWithPrep(ord.id, 40)">{{ t.prep40 }}</button>
+                      <button type="button" class="h-7 px-2.5 rounded-lg bg-white hover:bg-[#0066CC] hover:text-white border border-[#D2D2D7] text-[11px] font-bold cursor-pointer" @click="acceptOrderWithPrep(ord.id, 60)">{{ t.prep60 }}</button>
+                      <input
+                        v-model="customPrepMinutes"
+                        type="number"
+                        min="5"
+                        max="240"
+                        class="w-14 h-7 rounded-lg bg-white border border-[#D2D2D7] px-2 text-[11px] font-mono"
+                      />
+                      <button type="button" class="h-7 px-2.5 rounded-lg bg-[#0066CC] text-white text-[11px] font-bold cursor-pointer" @click="acceptOrderWithPrep(ord.id, customPrepMinutes)">
+                        {{ t.confirmAccept }}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1543,15 +1627,33 @@ const selectTab = (id) => {
                 </div>
               </div>
 
-              <div class="pt-2 flex flex-wrap gap-2">
-                <button
-                  v-if="selectedOrder.status === 'pending'"
-                  type="button"
-                  class="flex-1 h-10 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-                  @click="updateOrderStatus(selectedOrder.id, 'preparing')"
-                >
-                  {{ t.markPreparing }}
-                </button>
+              <div
+                v-if="selectedOrder.prepMinutes && selectedOrder.status !== 'cancelled'"
+                class="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs font-bold text-[#0066CC] flex items-center justify-between"
+              >
+                <span>{{ t.expectedReady }}</span>
+                <span>{{ selectedOrder.prepMinutes }} min{{ selectedOrder.estimatedReadyAt ? ` (${selectedOrder.estimatedReadyAt})` : '' }}</span>
+              </div>
+
+              <div v-if="selectedOrder.status === 'pending'" class="pt-2 space-y-2.5">
+                <div class="text-xs font-bold text-[#1D1D1F]">{{ t.setPrepTime }}:</div>
+                <div class="grid grid-cols-3 gap-2">
+                  <button type="button" class="h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer" @click="acceptOrderWithPrep(selectedOrder.id, 30)">{{ t.prep30 }}</button>
+                  <button type="button" class="h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer" @click="acceptOrderWithPrep(selectedOrder.id, 40)">{{ t.prep40 }}</button>
+                  <button type="button" class="h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer" @click="acceptOrderWithPrep(selectedOrder.id, 60)">{{ t.prep60 }}</button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input v-model="customPrepMinutes" type="number" min="5" max="240" class="w-24 h-9 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono" />
+                  <button type="button" class="flex-1 h-9 rounded-xl bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer" @click="acceptOrderWithPrep(selectedOrder.id, customPrepMinutes)">
+                    {{ t.confirmAccept }}
+                  </button>
+                  <button type="button" class="h-9 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold cursor-pointer" @click="rejectOrder(selectedOrder.id)">
+                    {{ t.rejectOrder }}
+                  </button>
+                </div>
+              </div>
+
+              <div v-else class="pt-2 flex flex-wrap gap-2">
                 <button
                   v-if="selectedOrder.status === 'preparing'"
                   type="button"
@@ -1573,12 +1675,51 @@ const selectTab = (id) => {
           </div>
         </template>
 
-        <!-- PRODUCTS TAB -->
-        <template v-else-if="activeTab === 'products'">
+        <!-- 2. MENU TAB -->
+        <template v-else-if="activeTab === 'menu'">
+          <div class="space-y-5">
+            <!-- Categories Manager -->
+            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.categoriesTitle }}</h2>
+                <form class="flex items-center gap-2" @submit.prevent="addCategory">
+                  <input
+                    v-model="newCategoryName"
+                    type="text"
+                    :placeholder="t.categoryPlaceholder"
+                    class="h-9 rounded-full bg-white border border-[#D2D2D7] px-3.5 text-xs focus:border-[#0066CC] focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    class="h-9 px-4 rounded-full bg-[#1D1D1F] hover:bg-black text-white text-xs font-bold cursor-pointer shrink-0"
+                  >
+                    + {{ t.addCategory }}
+                  </button>
+                </form>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <div
+                  v-for="cat in categories"
+                  :key="cat"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F5F5F7] border border-[#E5E5EA] text-xs font-semibold"
+                >
+                  <span>{{ cat }}</span>
+                  <button
+                    v-if="categories.length > 1"
+                    type="button"
+                    class="text-[#6E6E73] hover:text-rose-600 cursor-pointer"
+                    @click="deleteCategory(cat)"
+                  >
+                    <X :size="12" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
           <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
             <div class="flex items-center justify-between gap-3 flex-wrap">
               <div class="flex items-center gap-2 flex-wrap">
-                <h2 class="text-base font-extrabold text-[#1D1D1F] mr-2">{{ t.navProducts }} ({{ filteredProducts.length }})</h2>
+                <h2 class="text-base font-extrabold text-[#1D1D1F] mr-2">{{ t.navMenu }} ({{ filteredProducts.length }})</h2>
                 <button
                   v-for="cat in productCategories"
                   :key="cat"
@@ -1619,11 +1760,12 @@ const selectTab = (id) => {
               </div>
               <div>
                 <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">{{ t.category }}</label>
-                <input
+                <select
                   v-model="productForm.category"
-                  type="text"
-                  class="w-full h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
-                />
+                  class="w-full h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-semibold"
+                >
+                  <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+                </select>
               </div>
               <div>
                 <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">{{ t.price }} ({{ store.currency }}) *</label>
@@ -1724,36 +1866,154 @@ const selectTab = (id) => {
               </div>
             </div>
           </div>
-        </template>
-
-        <!-- CUSTOMERS TAB -->
-        <template v-else-if="activeTab === 'customers'">
-          <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
-            <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navCustomers }} ({{ customersList.length }})</h2>
-            <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
-              <div
-                v-for="c in customersList"
-                :key="c.phone || c.name"
-                class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-              >
-                <div>
-                  <div class="text-xs font-bold text-[#1D1D1F]">{{ c.name }}</div>
-                  <div class="text-[11px] text-[#6E6E73] font-mono">{{ c.phone }} • {{ c.address }}</div>
-                </div>
-                <div class="flex items-center gap-4 text-xs">
-                  <span class="text-[#6E6E73]">{{ t.ordersCount }}: <strong class="text-[#1D1D1F] tabular-nums">{{ c.ordersCount }}</strong></span>
-                  <span class="font-extrabold tabular-nums text-[#0066CC]">{{ c.totalSpent }} {{ store.currency }}</span>
-                </div>
-              </div>
-            </div>
           </div>
         </template>
 
-        <!-- COUPONS TAB -->
-        <template v-else-if="activeTab === 'coupons'">
-          <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4 max-w-3xl">
+        <!-- 4. REPORTS & ANALYTICS TAB -->
+        <template v-else-if="activeTab === 'reports'">
+          <div class="space-y-5">
+            <!-- Header: Period Filter (1M / 6M / 1Y) & Excel Export -->
+            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navReports }}</h2>
+                <p class="text-xs text-[#6E6E73]">{{ store.name }} • {{ t.salesHistory }}</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="inline-flex items-center p-1 rounded-full bg-[#F5F5F7] border border-[#E5E5EA]">
+                  <button
+                    v-for="p in [
+                      { id: 'month', label: t.reportsLastMonth },
+                      { id: '6months', label: t.reportsLast6Months },
+                      { id: 'year', label: t.reportsLastYear }
+                    ]"
+                    :key="p.id"
+                    type="button"
+                    :class="[
+                      'h-7 px-3 rounded-full text-[11px] font-bold cursor-pointer transition-colors',
+                      reportPeriod === p.id ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                    ]"
+                    @click="reportPeriod = p.id"
+                  >
+                    {{ p.label }}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="h-9 px-4 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                  @click="exportSalesToExcel"
+                >
+                  <Download :size="14" />
+                  <span>{{ t.exportExcel }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Period Summary KPIs -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1">
+                <div class="text-xs font-semibold text-[#6E6E73]">{{ t.kpiRevenue }}</div>
+                <div class="text-2xl font-extrabold tabular-nums text-[#0066CC]">
+                  {{ reportPeriodStats.revenue.toLocaleString('en-US') }} {{ store.currency }}
+                </div>
+              </div>
+              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1">
+                <div class="text-xs font-semibold text-[#6E6E73]">{{ t.ordersCount }}</div>
+                <div class="text-2xl font-extrabold tabular-nums">{{ reportPeriodStats.ordersCount }}</div>
+              </div>
+              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1">
+                <div class="text-xs font-semibold text-[#6E6E73]">{{ t.kpiAvgOrder }}</div>
+                <div class="text-2xl font-extrabold tabular-nums">{{ reportPeriodStats.avgOrder }} {{ store.currency }}</div>
+              </div>
+              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1">
+                <div class="text-xs font-semibold text-[#6E6E73]">{{ t.navCustomers }}</div>
+                <div class="text-2xl font-extrabold tabular-nums">{{ reportPeriodStats.uniqueCustomers }}</div>
+              </div>
+            </div>
+
+            <!-- Best-Selling Foods & Customer History -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <!-- Best-Selling Foods -->
+              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-3">
+                <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.bestSellingFoods }}</h3>
+                <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
+                  <div
+                    v-for="(item, idx) in bestSellingFoods"
+                    :key="item.name"
+                    class="px-4 py-3 flex items-center justify-between gap-2 text-xs"
+                  >
+                    <div class="flex items-center gap-2.5 min-w-0">
+                      <span class="h-6 w-6 rounded-full bg-[#F5F5F7] text-[#1D1D1F] font-extrabold text-[11px] flex items-center justify-center shrink-0">
+                        {{ idx + 1 }}
+                      </span>
+                      <span class="font-bold text-[#1D1D1F] truncate">{{ item.name }}</span>
+                    </div>
+                    <div class="flex items-center gap-3 shrink-0">
+                      <span class="text-[#6E6E73] font-semibold">{{ item.qty }} {{ t.unitsSold }}</span>
+                      <span class="font-extrabold tabular-nums text-[#0066CC]">{{ item.revenue }} {{ store.currency }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Customer History & Analytics -->
+              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-3">
+                <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.customerAnalytics }} ({{ customersList.length }})</h3>
+                <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
+                  <div
+                    v-for="c in customersList"
+                    :key="c.phone || c.name"
+                    class="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                  >
+                    <div>
+                      <div class="text-xs font-bold text-[#1D1D1F]">{{ c.name }}</div>
+                      <div class="text-[11px] text-[#6E6E73] font-mono">{{ c.phone }} • {{ c.address }}</div>
+                    </div>
+                    <div class="flex items-center gap-3 text-xs shrink-0">
+                      <span class="text-[#6E6E73]">{{ t.ordersCount }}: <strong class="text-[#1D1D1F] tabular-nums">{{ c.ordersCount }}</strong></span>
+                      <span class="font-extrabold tabular-nums text-[#0066CC]">{{ c.totalSpent }} {{ store.currency }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Complete Sales & Order History -->
+            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-3">
+              <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.salesHistory }} ({{ orders.length }})</h3>
+              <div class="overflow-x-auto border border-[#E5E5EA] rounded-2xl bg-white">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-[#F5F5F7] text-[#6E6E73] text-[11px] uppercase">
+                    <tr>
+                      <th class="px-4 py-2.5 font-bold">Order</th>
+                      <th class="px-4 py-2.5 font-bold">Customer</th>
+                      <th class="px-4 py-2.5 font-bold">Type</th>
+                      <th class="px-4 py-2.5 font-bold">Items</th>
+                      <th class="px-4 py-2.5 font-bold">Status</th>
+                      <th class="px-4 py-2.5 font-bold text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-[#E5E5EA]">
+                    <tr v-for="o in orders" :key="o.id" class="hover:bg-[#F5F5F7]/60">
+                      <td class="px-4 py-2.5 font-mono font-bold">{{ o.id }}</td>
+                      <td class="px-4 py-2.5">{{ o.customer }}</td>
+                      <td class="px-4 py-2.5">{{ o.deliveryType === 'Delivery' ? 'Delivery' : 'Takeaway' }}</td>
+                      <td class="px-4 py-2.5 text-[#6E6E73]">{{ o.lines.map((l) => `${l.qty}x ${l.name}`).join(', ') }}</td>
+                      <td class="px-4 py-2.5">
+                        <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold border', statusBadgeClass(o.status)]">
+                          {{ statusLabel(o.status) }}
+                        </span>
+                      </td>
+                      <td class="px-4 py-2.5 font-extrabold tabular-nums text-right">{{ o.total }} {{ store.currency }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Discount Codes -->
+          <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
             <div class="flex items-center justify-between gap-3 flex-wrap">
-              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navCoupons }} ({{ coupons.length }})</h2>
+              <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.navCoupons }} ({{ coupons.length }})</h3>
               <button
                 type="button"
                 class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
@@ -1822,15 +2082,30 @@ const selectTab = (id) => {
               </div>
             </div>
           </div>
+          </div>
         </template>
 
-        <!-- SHIPPING & ZONES TAB -->
-        <template v-else-if="activeTab === 'shipping'">
+        <!-- 3. DELIVERY SETTINGS TAB -->
+        <template v-else-if="activeTab === 'delivery'">
           <div class="space-y-5">
-            <!-- Base Shipping Price & Free Threshold -->
-            <div class="max-w-2xl rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-4">
-              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navShipping }}</h2>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Max Distance, Delivery Fee & Free Threshold -->
+            <div class="max-w-3xl rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-4">
+              <div>
+                <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navDelivery }}</h2>
+                <p class="text-xs text-[#6E6E73] mt-0.5">{{ t.deliveryAreaHint }}</p>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.maxDeliveryDistance }}</label>
+                  <input
+                    v-model="restaurantConfig.maxDeliveryKm"
+                    type="number"
+                    min="1"
+                    max="100"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                    @change="renderMapZones()"
+                  />
+                </div>
                 <div>
                   <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.shippingFee }} ({{ store.currency }})</label>
                   <input
@@ -1853,7 +2128,7 @@ const selectTab = (id) => {
               <button
                 type="button"
                 class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-                @click="showToast(t.savedToast)"
+                @click="renderMapZones(); showToast(t.savedToast)"
               >
                 {{ t.save }}
               </button>
@@ -1956,109 +2231,10 @@ const selectTab = (id) => {
           </div>
         </template>
 
-        <!-- TELEGRAM TAB -->
-        <template v-else-if="activeTab === 'telegram'">
-          <div class="max-w-xl rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
-            <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navTelegram }}</h2>
-            <div class="space-y-4">
-              <div>
-                <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.botToken }}</label>
-                <input
-                  v-model="telegramConfig.botToken"
-                  type="text"
-                  placeholder="123456789:AAH..."
-                  class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
-                />
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.chatId }}</label>
-                <input
-                  v-model="telegramConfig.chatId"
-                  type="text"
-                  placeholder="-1001234567890"
-                  class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
-                />
-              </div>
-            </div>
-            <button
-              type="button"
-              class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-              @click="showToast(t.savedToast)"
-            >
-              {{ t.save }}
-            </button>
-          </div>
-        </template>
-
-        <!-- STRIPE PAYMENTS TAB -->
-        <template v-else-if="activeTab === 'payments'">
-          <div class="max-w-xl rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
-            <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navPayments }}</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.stripeMode }}</label>
-                <select
-                  v-model="stripeConfig.mode"
-                  class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
-                >
-                  <option value="test">{{ t.testMode }}</option>
-                  <option value="live">{{ t.liveMode }}</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.currency }}</label>
-                <select
-                  v-model="store.currency"
-                  class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
-                >
-                  <option value="SEK">SEK</option>
-                  <option value="NOK">NOK</option>
-                  <option value="DKK">DKK</option>
-                  <option value="EUR">EUR</option>
-                </select>
-              </div>
-              <div class="sm:col-span-2">
-                <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.publishableKey }}</label>
-                <input
-                  v-model="stripeConfig.publishableKey"
-                  type="text"
-                  placeholder="pk_live_..."
-                  class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
-                />
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.shippingFee }}</label>
-                <input
-                  v-model="store.shippingFee"
-                  type="number"
-                  min="0"
-                  class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
-                />
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.freeShippingOver }}</label>
-                <input
-                  v-model="store.freeShippingOver"
-                  type="number"
-                  min="0"
-                  class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
-                />
-              </div>
-            </div>
-            <button
-              type="button"
-              class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
-              @click="showToast(t.savedToast)"
-            >
-              {{ t.save }}
-            </button>
-          </div>
-        </template>
-
-        <!-- SETTINGS TAB -->
+        <!-- 5. SETTINGS TAB -->
         <template v-else-if="activeTab === 'settings'">
-          <div class="space-y-5 max-w-3xl">
-            <!-- Clean Apple Segmented Sub-Navigation (Sorted & Flat) -->
+          <div class="space-y-5 max-w-4xl">
+            <!-- Clean Apple Segmented Sub-Navigation -->
             <div class="inline-flex flex-wrap items-center gap-1 p-1 rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA]">
               <button
                 type="button"
@@ -2104,17 +2280,134 @@ const selectTab = (id) => {
                 type="button"
                 :class="[
                   'h-9 px-3.5 rounded-xl text-xs font-bold cursor-pointer transition-colors',
+                  settingsSubTab === 'telegram' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                ]"
+                @click="settingsSubTab = 'telegram'"
+              >
+                {{ t.navTelegram }}
+              </button>
+              <button
+                type="button"
+                :class="[
+                  'h-9 px-3.5 rounded-xl text-xs font-bold cursor-pointer transition-colors',
                   settingsSubTab === 'smtp' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
                 ]"
                 @click="settingsSubTab = 'smtp'"
               >
                 {{ t.smtpSettings }}
               </button>
+              <button
+                type="button"
+                :class="[
+                  'h-9 px-3.5 rounded-xl text-xs font-bold cursor-pointer transition-colors',
+                  settingsSubTab === 'payments' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                ]"
+                @click="settingsSubTab = 'payments'"
+              >
+                {{ t.navPayments }}
+              </button>
+              <button
+                type="button"
+                :class="[
+                  'h-9 px-3.5 rounded-xl text-xs font-bold cursor-pointer transition-colors',
+                  settingsSubTab === 'install' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                ]"
+                @click="settingsSubTab = 'install'"
+              >
+                {{ t.navInstall }}
+              </button>
+            </div>
+
+            <!-- SUB-TAB: Telegram -->
+            <div v-if="settingsSubTab === 'telegram'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navTelegram }}</h2>
+              <div class="space-y-4">
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.botToken }}</label>
+                  <input
+                    v-model="telegramConfig.botToken"
+                    type="text"
+                    placeholder="123456789:AAH..."
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.chatId }}</label>
+                  <input
+                    v-model="telegramConfig.chatId"
+                    type="text"
+                    placeholder="-1001234567890"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+                @click="showToast(t.savedToast)"
+              >
+                {{ t.save }}
+              </button>
+            </div>
+
+            <!-- SUB-TAB: Stripe Payments -->
+            <div v-if="settingsSubTab === 'payments'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navPayments }}</h2>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.stripeMode }}</label>
+                  <select
+                    v-model="stripeConfig.mode"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
+                  >
+                    <option value="test">{{ t.testMode }}</option>
+                    <option value="live">{{ t.liveMode }}</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.currency }}</label>
+                  <select
+                    v-model="store.currency"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
+                  >
+                    <option value="SEK">SEK</option>
+                    <option value="NOK">NOK</option>
+                    <option value="DKK">DKK</option>
+                    <option value="EUR">EUR</option>
+                  </select>
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.publishableKey }}</label>
+                  <input
+                    v-model="stripeConfig.publishableKey"
+                    type="text"
+                    placeholder="pk_live_..."
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+                @click="showToast(t.savedToast)"
+              >
+                {{ t.save }}
+              </button>
             </div>
 
             <!-- SUB-TAB 1: Store Profile -->
             <div v-if="settingsSubTab === 'profile'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
-              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navSettings }}</h2>
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navSettings }}</h2>
+                <button
+                  type="button"
+                  class="h-9 px-4 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                  @click="openSetupWizard"
+                >
+                  <Rocket :size="13" class="text-[#0066CC]" />
+                  <span>Setup Wizard</span>
+                </button>
+              </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.storeName }}</label>
@@ -2465,12 +2758,9 @@ const selectTab = (id) => {
                 {{ t.save }}
               </button>
             </div>
-          </div>
-        </template>
 
-        <!-- INSTALL & SETUP TAB -->
-        <template v-else-if="activeTab === 'install'">
-          <div class="max-w-4xl space-y-5">
+            <!-- SUB-TAB: Install & Setup -->
+            <div v-if="settingsSubTab === 'install'" class="space-y-5">
             <!-- Header & Stepper -->
             <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
               <div class="flex flex-wrap items-center justify-between gap-3">
@@ -2711,6 +3001,7 @@ npx wrangler deploy  # Deploy panel to Cloudflare Workers</pre>
               </div>
             </div>
           </div>
+          </div>
         </template>
       </main>
     </div>
@@ -2760,6 +3051,180 @@ npx wrangler deploy  # Deploy panel to Cloudflare Workers</pre>
           </button>
         </div>
       </form>
+    </div>
+
+    <!-- First-Time Setup Wizard Modal (Next -> Next -> Finish) -->
+    <div
+      v-if="showSetupWizard"
+      class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4"
+    >
+      <div class="w-full max-w-xl rounded-3xl bg-white border border-[#E5E5EA] p-6 sm:p-7 space-y-5 shadow-2xl">
+        <!-- Header & Step Dots -->
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="text-[11px] font-bold uppercase tracking-wider text-[#0066CC]">
+              First-Time Setup • Step {{ wizardStep }} of 4
+            </div>
+            <h2 class="text-lg font-extrabold text-[#1D1D1F] mt-0.5">
+              {{ wizardStep === 1 ? 'Restaurant Name & Logo' : wizardStep === 2 ? 'Delivery & Takeaway Setup' : wizardStep === 3 ? 'Telegram & Email Alerts' : 'Ready to Launch!' }}
+            </h2>
+          </div>
+          <button
+            type="button"
+            class="text-xs font-semibold text-[#6E6E73] hover:text-[#1D1D1F] cursor-pointer"
+            @click="finishSetupWizard"
+          >
+            Skip
+          </button>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="grid grid-cols-4 gap-2">
+          <div
+            v-for="s in 4"
+            :key="s"
+            :class="['h-1.5 rounded-full transition-colors', s <= wizardStep ? 'bg-[#0066CC]' : 'bg-[#E5E5EA]']"
+          />
+        </div>
+
+        <!-- Step 1: Restaurant Name, Logo & Contact -->
+        <div v-if="wizardStep === 1" class="space-y-4">
+          <div class="flex items-center gap-4">
+            <div
+              class="h-16 w-16 rounded-2xl border border-[#E5E5EA] bg-[#F5F5F7] flex items-center justify-center overflow-hidden shrink-0 font-extrabold text-sm text-[#0066CC]"
+            >
+              <img v-if="store.logoUrl" :src="store.logoUrl" :alt="store.name" class="h-full w-full object-cover" />
+              <span v-else>{{ (store.name || 'SP').slice(0, 2).toUpperCase() }}</span>
+            </div>
+            <label class="h-9 px-4 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer">
+              <Upload :size="13" />
+              <span>{{ t.uploadLogo }}</span>
+              <input type="file" accept="image/*" class="hidden" @change="handleImageUpload($event, 'logo')" />
+            </label>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.storeName }}</label>
+              <input v-model="store.name" type="text" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.country }}</label>
+              <select
+                :value="store.country"
+                class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
+                @change="onCountryChange($event.target.value)"
+              >
+                <option v-for="c in STORE_COUNTRIES" :key="c.id" :value="c.id">{{ c.name }} ({{ c.currency }})</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.phone }}</label>
+              <input v-model="store.phone" type="text" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.address }}</label>
+              <input v-model="store.address" type="text" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Delivery & Takeaway Setup -->
+        <div v-else-if="wizardStep === 2" class="space-y-4">
+          <div class="flex flex-wrap gap-3">
+            <label class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] text-xs font-semibold cursor-pointer">
+              <input v-model="restaurantConfig.deliveryEnabled" type="checkbox" class="accent-[#0066CC]" />
+              <span>{{ t.deliveryEnabled }}</span>
+            </label>
+            <label class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] text-xs font-semibold cursor-pointer">
+              <input v-model="restaurantConfig.pickupEnabled" type="checkbox" class="accent-[#0066CC]" />
+              <span>{{ t.pickupEnabled }}</span>
+            </label>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.maxDeliveryDistance }}</label>
+              <input v-model="restaurantConfig.maxDeliveryKm" type="number" min="1" max="100" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.shippingFee }} ({{ store.currency }})</label>
+              <input v-model="store.shippingFee" type="number" min="0" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.freeShippingOver }} ({{ store.currency }})</label>
+              <input v-model="store.freeShippingOver" type="number" min="0" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.openingHours }}</label>
+              <input v-model="restaurantConfig.openingHours" type="text" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Telegram & Email Notifications -->
+        <div v-else-if="wizardStep === 3" class="space-y-3">
+          <div>
+            <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.chatId }} (Telegram Order Alerts)</label>
+            <input v-model="telegramConfig.chatId" type="text" placeholder="-1001234567890" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-mono" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.botToken }}</label>
+            <input v-model="telegramConfig.botToken" type="text" placeholder="123456789:AAH..." class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-mono" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.fromEmail }} (SMTP)</label>
+            <input v-model="smtpConfig.fromEmail" type="email" placeholder="orders@restaurant.se" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-mono" />
+          </div>
+        </div>
+
+        <!-- Step 4: Finish & Ready to Receive Orders -->
+        <div v-else class="space-y-3">
+          <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-2 text-xs text-emerald-900">
+            <div class="font-extrabold flex items-center gap-1.5 text-sm">
+              <CheckCircle2 :size="16" class="text-emerald-600" />
+              <span>{{ store.name }} is configured!</span>
+            </div>
+            <ul class="space-y-1 text-emerald-800">
+              <li>• Currency: <strong>{{ store.currency }}</strong> • Delivery Radius: <strong>{{ restaurantConfig.maxDeliveryKm }} km</strong></li>
+              <li>• Services: <strong>{{ restaurantConfig.deliveryEnabled ? 'Delivery' : '' }}{{ restaurantConfig.deliveryEnabled && restaurantConfig.pickupEnabled ? ' & ' : '' }}{{ restaurantConfig.pickupEnabled ? 'Takeaway' : '' }}</strong></li>
+              <li>• Telegram Alerts: <strong>{{ telegramConfig.chatId ? 'Connected' : 'Can be added later in Settings' }}</strong></li>
+            </ul>
+          </div>
+          <p class="text-xs text-[#6E6E73]">
+            Click <strong>Finish</strong> to start receiving and managing orders right away.
+          </p>
+        </div>
+
+        <!-- Wizard Footer Navigation: Back -> Next -> Finish -->
+        <div class="flex items-center justify-between pt-2 border-t border-[#E5E5EA]">
+          <button
+            v-if="wizardStep > 1"
+            type="button"
+            class="h-10 px-5 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-xs font-bold cursor-pointer"
+            @click="wizardStep -= 1"
+          >
+            ← Back
+          </button>
+          <span v-else />
+
+          <button
+            v-if="wizardStep < 4"
+            type="button"
+            class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+            @click="wizardStep += 1"
+          >
+            Next →
+          </button>
+          <button
+            v-else
+            type="button"
+            class="h-10 px-6 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+            @click="finishSetupWizard"
+          >
+            <Check :size="14" />
+            <span>Finish</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>

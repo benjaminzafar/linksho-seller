@@ -134,9 +134,39 @@ export default {
             totalAmount,
             currency: cfg.currency || 'SEK',
             status: 'pending',
+            prepMinutes: null,
+            estimatedReadyAt: null,
             createdAt,
           },
         }, 201);
+      }
+
+      // 2b. PUBLIC ORDER STATUS & ESTIMATED PREP TIME (For customer-facing website)
+      if (path === '/api/orders/status' && req.method === 'GET') {
+        const cfg = await getConfig(env);
+        const key = (url.searchParams.get('key') || '').trim();
+        const id = (url.searchParams.get('id') || '').trim();
+        if (!cfg || !key || key !== cfg.apiKey) {
+          return json({ ok: false, error: 'Invalid API key' }, 401);
+        }
+        if (!id) return json({ ok: false, error: 'Order ID required' }, 400);
+        const row = await env.DB.prepare('SELECT id, status, delivery_type, total_amount, currency, created_at FROM orders WHERE id = ?').bind(id).first();
+        if (!row) return json({ ok: false, error: 'Order not found' }, 404);
+        const prepRow = await env.DB.prepare('SELECT value FROM store_config WHERE key = ?').bind('order_prep_' + id).first();
+        const prepInfo = prepRow ? JSON.parse(prepRow.value) : {};
+        return json({
+          ok: true,
+          order: {
+            id: row.id,
+            status: row.status,
+            deliveryType: row.delivery_type,
+            totalAmount: row.total_amount,
+            currency: row.currency,
+            prepMinutes: prepInfo.prepMinutes || null,
+            estimatedReadyAt: prepInfo.estimatedReadyAt || null,
+            createdAt: row.created_at,
+          },
+        });
       }
 
       // 3. SELLER ADMIN AUTH
@@ -213,6 +243,14 @@ export default {
           const b = await req.json();
           if (b.id && b.status) {
             await env.DB.prepare('UPDATE orders SET status = ? WHERE id = ?').bind(b.status, b.id).run();
+            if (b.prepMinutes !== undefined || b.estimatedReadyAt !== undefined) {
+              await env.DB.prepare('INSERT OR REPLACE INTO store_config (key, value) VALUES (?, ?)')
+                .bind('order_prep_' + b.id, JSON.stringify({
+                  prepMinutes: Number(b.prepMinutes) || null,
+                  estimatedReadyAt: b.estimatedReadyAt || null,
+                }))
+                .run();
+            }
           }
           return json({ ok: true });
         }
