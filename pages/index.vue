@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -103,11 +103,49 @@ const smtpConfig = ref({
 const showSmtpPass = ref(false);
 
 const shippingZones = ref([
-  { id: 'ZN-1', name: 'City Center', range: '0 - 5 km / 111 20 - 114 55', price: 49, estTime: '25-35 min' },
-  { id: 'ZN-2', name: 'Greater Area', range: '5 - 15 km / 115 00 - 129 99', price: 89, estTime: '40-55 min' },
+  {
+    id: 'ZN-1',
+    name: 'City Center',
+    range: '0 - 5 km',
+    price: 49,
+    estTime: '25-35 min',
+    color: '#0066CC',
+    points: [
+      [59.341, 18.042],
+      [59.342, 18.088],
+      [59.318, 18.091],
+      [59.316, 18.041],
+    ],
+  },
+  {
+    id: 'ZN-2',
+    name: 'Greater Area',
+    range: '5 - 12 km',
+    price: 89,
+    estTime: '40-55 min',
+    color: '#059669',
+    points: [
+      [59.365, 18.012],
+      [59.367, 18.122],
+      [59.295, 18.125],
+      [59.292, 18.010],
+    ],
+  },
 ]);
 const showZoneForm = ref(false);
-const zoneForm = ref({ name: '', range: '', price: '', estTime: '' });
+const zoneForm = ref({ name: '', range: '', price: '', estTime: '30 min', color: '#0066CC' });
+const mapContainer = ref(null);
+const draftPoints = ref([]);
+let leafletMap = null;
+let zoneLayerGroup = null;
+let draftLayerGroup = null;
+
+const countryRates = ref([
+  { id: 'se', name: 'Sweden', price: 49, estDays: '1-2 days', enabled: true },
+  { id: 'no', name: 'Norway', price: 99, estDays: '2-4 days', enabled: true },
+  { id: 'dk', name: 'Denmark', price: 89, estDays: '2-3 days', enabled: true },
+]);
+const countryRateForm = ref({ id: 'fi', price: '119', estDays: '2-4 days' });
 
 const restaurantConfig = ref({
   prepTime: 25,
@@ -233,6 +271,7 @@ onMounted(() => {
       if (parsed.telegramConfig) telegramConfig.value = { ...telegramConfig.value, ...parsed.telegramConfig };
       if (parsed.smtpConfig) smtpConfig.value = { ...smtpConfig.value, ...parsed.smtpConfig };
       if (Array.isArray(parsed.shippingZones)) shippingZones.value = parsed.shippingZones;
+      if (Array.isArray(parsed.countryRates)) countryRates.value = parsed.countryRates;
       if (Array.isArray(parsed.coupons)) coupons.value = parsed.coupons;
       if (parsed.restaurantConfig) restaurantConfig.value = { ...restaurantConfig.value, ...parsed.restaurantConfig };
       if (parsed.webshopConfig) webshopConfig.value = { ...webshopConfig.value, ...parsed.webshopConfig };
@@ -243,7 +282,7 @@ onMounted(() => {
 });
 
 watch(
-  [lang, store, stripeConfig, telegramConfig, smtpConfig, shippingZones, coupons, restaurantConfig, webshopConfig, products, orders],
+  [lang, store, stripeConfig, telegramConfig, smtpConfig, shippingZones, countryRates, coupons, restaurantConfig, webshopConfig, products, orders],
   () => {
     try {
       localStorage.setItem(
@@ -255,6 +294,7 @@ watch(
           telegramConfig: telegramConfig.value,
           smtpConfig: smtpConfig.value,
           shippingZones: shippingZones.value,
+          countryRates: countryRates.value,
           coupons: coupons.value,
           restaurantConfig: restaurantConfig.value,
           webshopConfig: webshopConfig.value,
@@ -440,6 +480,82 @@ const deleteProduct = (id) => {
   showToast(t.value.savedToast);
 };
 
+const renderMapZones = () => {
+  const L = typeof window !== 'undefined' ? window.L : null;
+  if (!L || !leafletMap || !zoneLayerGroup || !draftLayerGroup) return;
+
+  zoneLayerGroup.clearLayers();
+  for (const z of shippingZones.value) {
+    if (Array.isArray(z.points) && z.points.length >= 3) {
+      const poly = L.polygon(z.points, {
+        color: z.color || '#0066CC',
+        fillColor: z.color || '#0066CC',
+        fillOpacity: 0.22,
+        weight: 2,
+      }).addTo(zoneLayerGroup);
+      poly.bindTooltip(`${z.name} • ${z.price} ${store.value.currency}`, { sticky: true });
+    }
+  }
+
+  draftLayerGroup.clearLayers();
+  for (const pt of draftPoints.value) {
+    L.circleMarker(pt, {
+      radius: 5,
+      color: '#1D1D1F',
+      fillColor: zoneForm.value.color || '#0066CC',
+      fillOpacity: 1,
+      weight: 2,
+    }).addTo(draftLayerGroup);
+  }
+  if (draftPoints.value.length >= 2) {
+    L.polygon(draftPoints.value, {
+      color: zoneForm.value.color || '#0066CC',
+      dashArray: '6, 6',
+      fillOpacity: 0.15,
+      weight: 2,
+    }).addTo(draftLayerGroup);
+  }
+};
+
+const initDeliveryMap = async () => {
+  await nextTick();
+  const L = typeof window !== 'undefined' ? window.L : null;
+  if (!L || !mapContainer.value) return;
+
+  if (leafletMap) {
+    leafletMap.remove();
+    leafletMap = null;
+  }
+
+  leafletMap = L.map(mapContainer.value).setView([59.3293, 18.0686], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 18,
+  }).addTo(leafletMap);
+
+  zoneLayerGroup = L.layerGroup().addTo(leafletMap);
+  draftLayerGroup = L.layerGroup().addTo(leafletMap);
+
+  leafletMap.on('click', (e) => {
+    draftPoints.value = [...draftPoints.value, [Number(e.latlng.lat.toFixed(5)), Number(e.latlng.lng.toFixed(5))]];
+    showZoneForm.value = true;
+    renderMapZones();
+  });
+
+  renderMapZones();
+};
+
+watch([activeTab, () => store.value.type], ([tab, stType]) => {
+  if (tab === 'shipping' && stType === 'restaurant') {
+    setTimeout(initDeliveryMap, 80);
+  }
+});
+
+const clearDraftPoints = () => {
+  draftPoints.value = [];
+  renderMapZones();
+};
+
 const addShippingZone = () => {
   const cleanName = zoneForm.value.name.trim();
   const numPrice = Number(zoneForm.value.price);
@@ -449,18 +565,53 @@ const addShippingZone = () => {
     {
       id: `ZN-${Math.floor(10 + Math.random() * 90)}`,
       name: cleanName,
-      range: zoneForm.value.range.trim() || '-',
+      range: zoneForm.value.range.trim() || `${draftPoints.value.length} map points`,
       price: numPrice,
-      estTime: zoneForm.value.estTime.trim() || '-',
+      estTime: zoneForm.value.estTime.trim() || '30 min',
+      color: zoneForm.value.color || '#0066CC',
+      points: draftPoints.value.length >= 3 ? [...draftPoints.value] : [],
     },
   ];
-  zoneForm.value = { name: '', range: '', price: '', estTime: '' };
+  zoneForm.value = { name: '', range: '', price: '', estTime: '30 min', color: '#0066CC' };
+  draftPoints.value = [];
   showZoneForm.value = false;
+  renderMapZones();
   showToast(t.value.savedToast);
 };
 
 const deleteShippingZone = (id) => {
   shippingZones.value = shippingZones.value.filter((z) => z.id !== id);
+  renderMapZones();
+  showToast(t.value.savedToast);
+};
+
+const addCountryRate = () => {
+  const countryObj = STORE_COUNTRIES.find((c) => c.id === countryRateForm.value.id);
+  const priceNum = Number(countryRateForm.value.price);
+  if (!countryObj || Number.isNaN(priceNum) || priceNum < 0) return;
+  const existingIdx = countryRates.value.findIndex((c) => c.id === countryObj.id);
+  const entry = {
+    id: countryObj.id,
+    name: countryObj.name,
+    price: priceNum,
+    estDays: countryRateForm.value.estDays.trim() || '2-4 days',
+    enabled: true,
+  };
+  if (existingIdx >= 0) {
+    countryRates.value = countryRates.value.map((c, i) => (i === existingIdx ? entry : c));
+  } else {
+    countryRates.value = [...countryRates.value, entry];
+  }
+  showToast(t.value.savedToast);
+};
+
+const toggleCountryRate = (id) => {
+  countryRates.value = countryRates.value.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c));
+  showToast(t.value.savedToast);
+};
+
+const deleteCountryRate = (id) => {
+  countryRates.value = countryRates.value.filter((c) => c.id !== id);
   showToast(t.value.savedToast);
 };
 
@@ -1318,23 +1469,39 @@ const selectTab = (id) => {
               </button>
             </div>
 
-            <!-- Shipping Zones -->
-            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
+            <!-- RESTAURANT: Free OpenStreetMap Interactive Delivery Zone Drawer -->
+            <div v-if="store.type === 'restaurant'" class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
               <div class="flex items-center justify-between gap-3 flex-wrap">
-                <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.shippingZones }} ({{ shippingZones.length }})</h3>
-                <button
-                  type="button"
-                  class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
-                  @click="showZoneForm = !showZoneForm"
-                >
-                  <Plus :size="14" />
-                  <span>{{ t.addZone }}</span>
-                </button>
+                <div>
+                  <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.drawZoneMap }}</h3>
+                  <p class="text-xs text-[#6E6E73] mt-0.5">{{ t.clickMapPoints }}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    v-if="draftPoints.length > 0"
+                    type="button"
+                    class="h-9 px-3.5 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-xs font-semibold cursor-pointer"
+                    @click="clearDraftPoints"
+                  >
+                    {{ t.clearPoints }} ({{ draftPoints.length }})
+                  </button>
+                  <button
+                    type="button"
+                    class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                    @click="showZoneForm = !showZoneForm"
+                  >
+                    <Plus :size="14" />
+                    <span>{{ t.addZone }}</span>
+                  </button>
+                </div>
               </div>
+
+              <!-- OpenStreetMap Canvas -->
+              <div ref="mapContainer" class="w-full h-72 sm:h-80 rounded-2xl border border-[#E5E5EA] overflow-hidden z-10 bg-[#ECECEF]" />
 
               <form
                 v-if="showZoneForm"
-                class="p-4 rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+                class="p-4 rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"
                 @submit.prevent="addShippingZone"
               >
                 <input
@@ -1345,12 +1512,6 @@ const selectTab = (id) => {
                   class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
                 />
                 <input
-                  v-model="zoneForm.range"
-                  type="text"
-                  :placeholder="t.zoneRange"
-                  class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
-                />
-                <input
                   v-model="zoneForm.price"
                   type="number"
                   min="0"
@@ -1358,17 +1519,20 @@ const selectTab = (id) => {
                   :placeholder="`${t.zonePrice} (${store.currency})`"
                   class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono"
                 />
-                <div class="flex gap-2">
-                  <input
-                    v-model="zoneForm.estTime"
-                    type="text"
-                    :placeholder="t.estTime"
-                    class="flex-1 h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
-                  />
-                  <button type="submit" class="h-10 px-4 rounded-xl bg-[#0066CC] text-white text-xs font-bold cursor-pointer">
-                    {{ t.save }}
-                  </button>
-                </div>
+                <input
+                  v-model="zoneForm.estTime"
+                  type="text"
+                  :placeholder="t.estTime"
+                  class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
+                />
+                <input
+                  v-model="zoneForm.color"
+                  type="color"
+                  class="h-10 w-full rounded-xl border border-[#D2D2D7] bg-white px-1 cursor-pointer"
+                />
+                <button type="submit" class="h-10 px-4 rounded-xl bg-[#0066CC] text-white text-xs font-bold cursor-pointer">
+                  {{ t.save }}
+                </button>
               </form>
 
               <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
@@ -1377,9 +1541,14 @@ const selectTab = (id) => {
                   :key="z.id"
                   class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
                 >
-                  <div>
-                    <div class="text-xs font-bold text-[#1D1D1F]">{{ z.name }}</div>
-                    <div class="text-[11px] text-[#6E6E73]">{{ z.range }} • {{ z.estTime }}</div>
+                  <div class="flex items-center gap-3">
+                    <span class="h-3.5 w-3.5 rounded-full shrink-0" :style="{ backgroundColor: z.color || '#0066CC' }" />
+                    <div>
+                      <div class="text-xs font-bold text-[#1D1D1F]">{{ z.name }}</div>
+                      <div class="text-[11px] text-[#6E6E73]">
+                        {{ z.points?.length ? `${z.points.length} pts` : z.range }} • {{ z.estTime }}
+                      </div>
+                    </div>
                   </div>
                   <div class="flex items-center gap-3">
                     <span class="text-xs font-extrabold tabular-nums text-[#0066CC]">{{ z.price }} {{ store.currency }}</span>
@@ -1387,6 +1556,73 @@ const selectTab = (id) => {
                       type="button"
                       class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center cursor-pointer"
                       @click="deleteShippingZone(z.id)"
+                    >
+                      <Trash2 :size="13" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ONLINE SHOP: Country-Based Shipping & Pricing -->
+            <div v-else class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
+              <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.countryShipping }} ({{ countryRates.length }})</h3>
+
+              <form
+                class="p-4 rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] grid grid-cols-1 sm:grid-cols-4 gap-3"
+                @submit.prevent="addCountryRate"
+              >
+                <select
+                  v-model="countryRateForm.id"
+                  class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-semibold"
+                >
+                  <option v-for="c in STORE_COUNTRIES" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
+                <input
+                  v-model="countryRateForm.price"
+                  type="number"
+                  min="0"
+                  required
+                  :placeholder="`${t.zonePrice} (${store.currency})`"
+                  class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono"
+                />
+                <input
+                  v-model="countryRateForm.estDays"
+                  type="text"
+                  :placeholder="t.estDays"
+                  class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
+                />
+                <button type="submit" class="h-10 px-4 rounded-xl bg-[#0066CC] text-white text-xs font-bold cursor-pointer">
+                  {{ t.addCountryRate }}
+                </button>
+              </form>
+
+              <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
+                <div
+                  v-for="cr in countryRates"
+                  :key="cr.id"
+                  class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                >
+                  <div>
+                    <div class="text-xs font-bold text-[#1D1D1F]">{{ cr.name }}</div>
+                    <div class="text-[11px] text-[#6E6E73]">{{ cr.estDays }}</div>
+                  </div>
+                  <div class="flex items-center gap-2.5">
+                    <span class="text-xs font-extrabold tabular-nums text-[#0066CC]">{{ cr.price }} {{ store.currency }}</span>
+                    <button
+                      type="button"
+                      :class="[
+                        'h-8 px-3 rounded-full text-[11px] font-bold border cursor-pointer',
+                        cr.enabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-stone-100 text-stone-600 border-stone-200'
+                      ]"
+                      @click="toggleCountryRate(cr.id)"
+                    >
+                      {{ cr.enabled ? t.available : t.unavailable }}
+                    </button>
+                    <button
+                      type="button"
+                      class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center cursor-pointer"
+                      @click="deleteCountryRate(cr.id)"
                     >
                       <Trash2 :size="13" />
                     </button>
