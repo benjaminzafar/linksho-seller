@@ -796,8 +796,10 @@ const selectTab = (id) => {
             @click="selectTab(item.id)"
           >
             <span class="flex items-center gap-2.5">
-              <component :is="item.icon" :size="16" class="shrink-0" />
-              <span v-if="!sidebarCollapsed">{{ item.label }}</span>
+              <span class="flex h-5 w-5 items-center justify-center shrink-0">
+                <component :is="item.icon" :size="16" :stroke-width="2" class="block" />
+              </span>
+              <span v-if="!sidebarCollapsed" class="leading-none">{{ item.label }}</span>
             </span>
             <span
               v-if="item.badge !== undefined && !sidebarCollapsed"
@@ -844,14 +846,18 @@ const selectTab = (id) => {
           target="_blank"
           rel="noopener noreferrer"
           :title="store.customDomain"
-          class="flex items-center justify-between gap-2 text-[#1D1D1F] hover:text-[#0066CC] font-semibold transition-colors"
+          class="flex items-center justify-between gap-2 text-[#1D1D1F] hover:text-[#0066CC] font-semibold transition-colors leading-none"
         >
-          <span v-if="!sidebarCollapsed" class="truncate font-mono">{{ store.customDomain }}</span>
-          <ExternalLink :size="13" class="shrink-0 text-[#86868B]" />
+          <span v-if="!sidebarCollapsed" class="truncate font-mono leading-none">{{ store.customDomain }}</span>
+          <span class="flex h-4 w-4 items-center justify-center shrink-0">
+            <ExternalLink :size="13" :stroke-width="2" class="block text-[#86868B]" />
+          </span>
         </a>
-        <div v-if="!sidebarCollapsed" class="flex items-center gap-1.5 text-emerald-600 font-semibold">
-          <Lock :size="12" />
-          <span>{{ t.sslActive }}</span>
+        <div v-if="!sidebarCollapsed" class="flex items-center gap-1.5 text-emerald-600 font-semibold leading-none">
+          <span class="flex h-4 w-4 items-center justify-center shrink-0">
+            <Lock :size="12" :stroke-width="2" class="block" />
+          </span>
+          <span class="leading-none">{{ t.sslActive }}</span>
         </div>
       </div>
     </aside>
@@ -869,13 +875,15 @@ const selectTab = (id) => {
             <Menu :size="17" />
           </button>
 
-          <div class="relative w-full max-w-sm">
-            <Search :size="14" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#86868B] pointer-events-none" />
+          <div class="relative w-full max-w-sm flex items-center">
+            <span class="absolute left-3 flex h-4 w-4 items-center justify-center text-[#86868B] pointer-events-none">
+              <Search :size="14" :stroke-width="2" class="block" />
+            </span>
             <input
               v-model="searchQuery"
               type="text"
               :placeholder="t.searchPlaceholder"
-              class="w-full h-9 rounded-full bg-[#F5F5F7] border border-[#E5E5EA] pl-9 pr-4 text-xs focus:bg-white focus:border-[#0066CC] focus:outline-none transition-colors"
+              class="w-full h-9 rounded-full bg-[#F5F5F7] border border-[#E5E5EA] pl-9 pr-4 text-xs leading-none focus:bg-white focus:border-[#0066CC] focus:outline-none transition-colors"
             />
           </div>
         </div>
@@ -886,32 +894,38 @@ const selectTab = (id) => {
             <button
               type="button"
               :class="[
-                'h-7 px-3 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors',
+                'h-7 px-3 rounded-full text-[11px] font-bold leading-none inline-flex items-center gap-1.5 cursor-pointer transition-colors',
                 store.type === 'restaurant' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
               ]"
               @click="store.type = 'restaurant'; showToast(t.savedToast)"
             >
-              <Utensils :size="12" />
-              <span>{{ t.typeRestaurant }}</span>
+              <span class="flex h-3.5 w-3.5 items-center justify-center shrink-0">
+                <Utensils :size="12" :stroke-width="2" class="block" />
+              </span>
+              <span class="leading-none">{{ t.typeRestaurant }}</span>
             </button>
             <button
               type="button"
               :class="[
-                'h-7 px-3 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors',
+                'h-7 px-3 rounded-full text-[11px] font-bold leading-none inline-flex items-center gap-1.5 cursor-pointer transition-colors',
                 store.type === 'webshop' ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
               ]"
               @click="store.type = 'webshop'; showToast(t.savedToast)"
             >
-              <ShoppingBag :size="12" />
-              <span>{{ t.typeWebshop }}</span>
+              <span class="flex h-3.5 w-3.5 items-center justify-center shrink-0">
+                <ShoppingBag :size="12" :stroke-width="2" class="block" />
+              </span>
+              <span class="leading-none">{{ t.typeWebshop }}</span>
             </button>
           </div>
 
           <div class="relative flex items-center">
-            <Globe :size="14" class="absolute left-3 text-[#6E6E73] pointer-events-none" />
+            <span class="absolute left-3 flex h-4 w-4 items-center justify-center text-[#6E6E73] pointer-events-none">
+              <Globe :size="14" :stroke-width="2" class="block" />
+            </span>
             <select
               v-model="lang"
-              class="h-9 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] pl-8 pr-3 text-xs font-semibold text-[#1D1D1F] focus:border-[#0066CC] focus:outline-none cursor-pointer transition-colors"
+              class="h-9 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] pl-8 pr-3 text-xs font-semibold leading-none text-[#1D1D1F] focus:border-[#0066CC] focus:outline-none cursor-pointer transition-colors"
             >
               <option v-for="l in SELLER_LANGUAGES" :key="l.code" :value="l.code">
                 {{ l.flag }} {{ l.label }}
@@ -932,20 +946,24 @@ const selectTab = (id) => {
             </div>
             <button
               type="button"
-              class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+              class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold leading-none inline-flex items-center gap-1.5 cursor-pointer"
               @click="activeTab = 'products'; openNewProductForm()"
             >
-              <Plus :size="14" />
-              <span>{{ t.addProduct }}</span>
+              <span class="flex h-4 w-4 items-center justify-center shrink-0">
+                <Plus :size="14" :stroke-width="2.2" class="block" />
+              </span>
+              <span class="leading-none">{{ t.addProduct }}</span>
             </button>
           </div>
 
           <!-- KPI Grid -->
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1.5">
-              <div class="flex items-center justify-between text-xs font-semibold text-[#6E6E73]">
-                <span>{{ t.kpiRevenue }}</span>
-                <TrendingUp :size="15" class="text-[#0066CC]" />
+              <div class="flex items-center justify-between text-xs font-semibold leading-none text-[#6E6E73]">
+                <span class="leading-none">{{ t.kpiRevenue }}</span>
+                <span class="flex h-4 w-4 items-center justify-center shrink-0">
+                  <TrendingUp :size="15" :stroke-width="2" class="block text-[#0066CC]" />
+                </span>
               </div>
               <div class="text-2xl font-extrabold tabular-nums">
                 {{ totalRevenue.toLocaleString('en-US') }} {{ store.currency }}
@@ -953,9 +971,11 @@ const selectTab = (id) => {
             </div>
 
             <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1.5">
-              <div class="flex items-center justify-between text-xs font-semibold text-[#6E6E73]">
-                <span>{{ t.kpiOrders }}</span>
-                <Clock :size="15" class="text-amber-600" />
+              <div class="flex items-center justify-between text-xs font-semibold leading-none text-[#6E6E73]">
+                <span class="leading-none">{{ t.kpiOrders }}</span>
+                <span class="flex h-4 w-4 items-center justify-center shrink-0">
+                  <Clock :size="15" :stroke-width="2" class="block text-amber-600" />
+                </span>
               </div>
               <div class="text-2xl font-extrabold tabular-nums">
                 {{ activeOrdersCount }}
@@ -963,9 +983,11 @@ const selectTab = (id) => {
             </div>
 
             <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1.5">
-              <div class="flex items-center justify-between text-xs font-semibold text-[#6E6E73]">
-                <span>{{ t.kpiProducts }}</span>
-                <Package :size="15" class="text-emerald-600" />
+              <div class="flex items-center justify-between text-xs font-semibold leading-none text-[#6E6E73]">
+                <span class="leading-none">{{ t.kpiProducts }}</span>
+                <span class="flex h-4 w-4 items-center justify-center shrink-0">
+                  <Package :size="15" :stroke-width="2" class="block text-emerald-600" />
+                </span>
               </div>
               <div class="text-2xl font-extrabold tabular-nums">
                 {{ products.length }}
@@ -973,9 +995,11 @@ const selectTab = (id) => {
             </div>
 
             <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1.5">
-              <div class="flex items-center justify-between text-xs font-semibold text-[#6E6E73]">
-                <span>{{ t.kpiAvgOrder }}</span>
-                <CreditCard :size="15" class="text-[#0066CC]" />
+              <div class="flex items-center justify-between text-xs font-semibold leading-none text-[#6E6E73]">
+                <span class="leading-none">{{ t.kpiAvgOrder }}</span>
+                <span class="flex h-4 w-4 items-center justify-center shrink-0">
+                  <CreditCard :size="15" :stroke-width="2" class="block text-[#0066CC]" />
+                </span>
               </div>
               <div class="text-2xl font-extrabold tabular-nums">
                 {{ avgOrderValue }} {{ store.currency }}
@@ -1147,18 +1171,24 @@ const selectTab = (id) => {
                 </button>
               </div>
 
-              <div class="space-y-2 text-xs">
-                <div class="flex items-center gap-2 font-bold text-[#1D1D1F]">
-                  <Users :size="14" class="text-[#6E6E73]" />
-                  <span>{{ selectedOrder.customer }}</span>
+              <div class="space-y-2.5 text-xs">
+                <div class="flex items-center gap-2 font-bold leading-none text-[#1D1D1F]">
+                  <span class="flex h-4 w-4 items-center justify-center shrink-0">
+                    <Users :size="14" :stroke-width="2" class="block text-[#6E6E73]" />
+                  </span>
+                  <span class="leading-none">{{ selectedOrder.customer }}</span>
                 </div>
-                <div class="flex items-center gap-2 text-[#515154] font-mono">
-                  <Phone :size="14" class="text-[#6E6E73]" />
-                  <a :href="`tel:${selectedOrder.phone}`" class="hover:text-[#0066CC]">{{ selectedOrder.phone }}</a>
+                <div class="flex items-center gap-2 text-[#515154] font-mono leading-none">
+                  <span class="flex h-4 w-4 items-center justify-center shrink-0">
+                    <Phone :size="14" :stroke-width="2" class="block text-[#6E6E73]" />
+                  </span>
+                  <a :href="`tel:${selectedOrder.phone}`" class="hover:text-[#0066CC] leading-none">{{ selectedOrder.phone }}</a>
                 </div>
-                <div class="flex items-center gap-2 text-[#515154]">
-                  <MapPin :size="14" class="text-[#6E6E73]" />
-                  <span>{{ selectedOrder.address }}</span>
+                <div class="flex items-center gap-2 text-[#515154] leading-none">
+                  <span class="flex h-4 w-4 items-center justify-center shrink-0">
+                    <MapPin :size="14" :stroke-width="2" class="block text-[#6E6E73]" />
+                  </span>
+                  <span class="leading-none">{{ selectedOrder.address }}</span>
                 </div>
               </div>
 
