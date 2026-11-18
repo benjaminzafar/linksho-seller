@@ -701,16 +701,20 @@ const avgOrderValue = computed(() => {
 const orderCountsByStatus = computed(() => ({
   all: orders.value.length,
   pending: orders.value.filter((o) => o.status === 'pending').length,
-  preparing: orders.value.filter((o) => o.status === 'preparing').length,
-  ready: orders.value.filter((o) => o.status === 'ready').length,
-  delivered: orders.value.filter((o) => o.status === 'delivered').length,
+  preparing: orders.value.filter((o) => ['preparing', 'ready', 'delivered'].includes(o.status)).length,
   cancelled: orders.value.filter((o) => o.status === 'cancelled').length,
 }));
 
 const filteredOrders = computed(() => {
   const q = searchQuery.value.trim().toLowerCase();
   return orders.value.filter((o) => {
-    if (orderFilter.value !== 'all' && o.status !== orderFilter.value) return false;
+    if (orderFilter.value !== 'all') {
+      if (orderFilter.value === 'preparing') {
+        if (!['preparing', 'ready', 'delivered'].includes(o.status)) return false;
+      } else if (o.status !== orderFilter.value) {
+        return false;
+      }
+    }
     if (orderTypeFilter.value !== 'all' && o.deliveryType !== orderTypeFilter.value) return false;
     if (!q) return true;
     return (
@@ -765,9 +769,7 @@ const customersList = computed(() => {
 
 const statusBadgeClass = (status) => {
   if (status === 'pending') return 'bg-amber-50 text-amber-800 border-amber-200';
-  if (status === 'preparing') return 'bg-blue-50 text-[#0066CC] border-blue-200';
-  if (status === 'ready') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  if (status === 'delivered') return 'bg-stone-100 text-stone-700 border-stone-200';
+  if (['preparing', 'ready', 'delivered'].includes(status)) return 'bg-blue-50 text-[#0066CC] border-blue-200';
   return 'bg-rose-50 text-rose-700 border-rose-200';
 };
 
@@ -776,7 +778,7 @@ const statusLabel = (status) => {
     pending: t.value.statusPending,
     preparing: 'Accepted',
     ready: 'Accepted',
-    delivered: t.value.statusDelivered,
+    delivered: 'Accepted',
     cancelled: t.value.statusRejected || t.value.statusCancelled,
   };
   return map[status] || status;
@@ -1422,34 +1424,34 @@ const selectTab = (id) => {
             </div>
           </div>
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            <div :class="[selectedOrder ? 'lg:col-span-7' : 'lg:col-span-12', 'rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4']">
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <div class="flex items-center gap-2.5 flex-wrap">
-                  <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navOrders }} ({{ filteredOrders.length }})</h2>
-                  <!-- Delivery vs Takeaway Quick Filter -->
-                  <div class="inline-flex items-center p-0.5 rounded-full bg-[#F5F5F7] border border-[#E5E5EA]">
-                    <button
-                      v-for="dt in [{ id: 'all', label: t.filterAll }, { id: 'Delivery', label: 'Delivery' }, { id: 'Pickup', label: 'Takeaway' }]"
-                      :key="dt.id"
-                      type="button"
-                      :class="[
-                        'h-7 px-3 rounded-full text-[11px] font-bold cursor-pointer transition-colors',
-                        orderTypeFilter === dt.id ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
-                      ]"
-                      @click="orderTypeFilter = dt.id"
-                    >
-                      {{ dt.label }}
-                    </button>
-                  </div>
+            <div :class="[selectedOrder ? 'lg:col-span-7' : 'lg:col-span-12', 'space-y-3.5']">
+              <!-- Filter Toolbar directly on page background (no outer box) -->
+              <div class="flex flex-wrap items-center justify-between gap-2.5">
+                <div class="inline-flex items-center p-1 rounded-full bg-white border border-[#E5E5EA]">
+                  <button
+                    v-for="dt in [{ id: 'all', label: t.filterAll }, { id: 'Delivery', label: 'Delivery' }, { id: 'Pickup', label: 'Takeaway' }]"
+                    :key="dt.id"
+                    type="button"
+                    :class="[
+                      'h-7 px-3 rounded-full text-[11px] font-bold cursor-pointer transition-colors',
+                      orderTypeFilter === dt.id ? 'bg-[#0066CC] text-white' : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                    ]"
+                    @click="orderTypeFilter = dt.id"
+                  >
+                    {{ dt.label }}
+                  </button>
                 </div>
+
                 <div class="flex items-center gap-1.5 flex-wrap">
                   <button
                     v-for="st in ['all', 'pending', 'preparing', 'cancelled']"
                     :key="st"
                     type="button"
                     :class="[
-                      'h-8 px-3 rounded-full text-xs font-semibold cursor-pointer transition-colors',
-                      orderFilter === st ? 'bg-[#1D1D1F] text-white' : 'bg-[#F5F5F7] text-[#6E6E73] hover:text-[#1D1D1F]'
+                      'h-8 px-3 rounded-full text-xs font-semibold cursor-pointer transition-colors border',
+                      orderFilter === st
+                        ? 'bg-[#1D1D1F] text-white border-[#1D1D1F]'
+                        : 'bg-white text-[#6E6E73] border-[#E5E5EA] hover:text-[#1D1D1F]'
                     ]"
                     @click="orderFilter = st"
                   >
@@ -1458,20 +1460,22 @@ const selectTab = (id) => {
                 </div>
               </div>
 
-              <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
+              <!-- Single-layer flat card per order -->
+              <div class="space-y-2.5">
                 <div
                   v-for="ord in filteredOrders"
                   :key="ord.id"
                   :class="[
-                    'p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer transition-colors',
-                    ord.status === 'pending' ? 'border-l-4 border-l-amber-500' : '',
-                    selectedOrderId === ord.id ? 'bg-[#0066CC]/[0.05]' : 'hover:bg-[#F5F5F7]/70'
+                    'rounded-2xl bg-white border p-4 cursor-pointer transition-all space-y-2.5',
+                    ord.status === 'pending' ? 'border-l-4 border-l-amber-500 border-[#E5E5EA]' : 'border-[#E5E5EA]',
+                    selectedOrderId === ord.id ? 'ring-2 ring-[#0066CC]/30 border-[#0066CC]' : 'hover:border-[#D2D2D7]'
                   ]"
                   @click="selectedOrderId = ord.id"
                 >
-                  <div class="space-y-1">
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <span class="font-mono text-xs font-bold">{{ ord.id }}</span>
+                  <!-- Top Row: ID, Customer, Badges + Price aligned right -->
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-center gap-2 flex-wrap min-w-0">
+                      <span class="font-mono text-xs font-extrabold text-[#1D1D1F]">{{ ord.id }}</span>
                       <span class="text-xs font-bold text-[#1D1D1F]">{{ ord.customer }}</span>
                       <span
                         :class="[
@@ -1486,47 +1490,49 @@ const selectTab = (id) => {
                       </span>
                       <span
                         v-if="ord.prepMinutes && ord.status !== 'cancelled'"
-                        class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#F5F5F7] text-[#1D1D1F] border border-[#E5E5EA]"
+                        class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#F5F5F7] text-[#1D1D1F]"
                       >
                         ⏱ {{ ord.prepMinutes }} min{{ ord.estimatedReadyAt ? ` (${ord.estimatedReadyAt})` : '' }}
                       </span>
                     </div>
-                    <p class="text-xs text-[#515154]">{{ ord.lines.map((l) => `${l.qty}x ${l.name}`).join(', ') }}</p>
+                    <span class="text-sm font-extrabold tabular-nums text-[#1D1D1F] shrink-0">{{ ord.total }} {{ store.currency }}</span>
+                  </div>
+
+                  <!-- Order Items & Address -->
+                  <div class="space-y-0.5">
+                    <p class="text-xs font-medium text-[#1D1D1F]">{{ ord.lines.map((l) => `${l.qty}x ${l.name}`).join(', ') }}</p>
                     <p class="text-[11px] text-[#86868B]">{{ ord.address }} • {{ ord.payment }} • {{ ord.time }}</p>
                   </div>
 
-                  <div class="flex flex-col items-end gap-2 shrink-0" @click.stop>
+                  <!-- Pending Order Action Bar -->
+                  <div v-if="ord.status === 'pending'" class="pt-1 flex flex-col gap-2" @click.stop>
                     <div class="flex items-center gap-2 flex-wrap">
-                      <span class="text-sm font-extrabold tabular-nums">{{ ord.total }} {{ store.currency }}</span>
-                      <template v-if="ord.status === 'pending'">
-                        <button
-                          type="button"
-                          class="h-9 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
-                          @click="acceptingOrderId = acceptingOrderId === ord.id ? '' : ord.id"
-                        >
-                          <Check :size="14" />
-                          <span>{{ t.acceptOrder }}</span>
-                        </button>
-                        <button
-                          type="button"
-                          class="h-9 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
-                          @click="rejectOrder(ord.id)"
-                        >
-                          <XCircle :size="14" />
-                          <span>{{ t.rejectOrder }}</span>
-                        </button>
-                      </template>
+                      <button
+                        type="button"
+                        class="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                        @click="acceptingOrderId = acceptingOrderId === ord.id ? '' : ord.id"
+                      >
+                        <Check :size="14" />
+                        <span>{{ t.acceptOrder }}</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="h-9 px-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
+                        @click="rejectOrder(ord.id)"
+                      >
+                        <XCircle :size="14" />
+                        <span>{{ t.rejectOrder }}</span>
+                      </button>
                     </div>
 
-                    <!-- Inline Preparation Time Picker when Accepting -->
                     <div
-                      v-if="ord.status === 'pending' && acceptingOrderId === ord.id"
-                      class="p-2.5 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] flex flex-wrap items-center gap-1.5"
+                      v-if="acceptingOrderId === ord.id"
+                      class="p-2.5 rounded-xl bg-[#F5F5F7] flex flex-wrap items-center gap-1.5"
                     >
                       <span class="text-[11px] font-bold text-[#1D1D1F] mr-1">{{ t.setPrepTime }}:</span>
-                      <button type="button" class="h-7 px-2.5 rounded-lg bg-white hover:bg-[#0066CC] hover:text-white border border-[#D2D2D7] text-[11px] font-bold cursor-pointer" @click="acceptOrderWithPrep(ord.id, 30)">{{ t.prep30 }}</button>
-                      <button type="button" class="h-7 px-2.5 rounded-lg bg-white hover:bg-[#0066CC] hover:text-white border border-[#D2D2D7] text-[11px] font-bold cursor-pointer" @click="acceptOrderWithPrep(ord.id, 40)">{{ t.prep40 }}</button>
-                      <button type="button" class="h-7 px-2.5 rounded-lg bg-white hover:bg-[#0066CC] hover:text-white border border-[#D2D2D7] text-[11px] font-bold cursor-pointer" @click="acceptOrderWithPrep(ord.id, 60)">{{ t.prep60 }}</button>
+                      <button type="button" class="h-7 px-2.5 rounded-lg bg-white hover:bg-[#0066CC] hover:text-white text-[11px] font-bold cursor-pointer" @click="acceptOrderWithPrep(ord.id, 30)">{{ t.prep30 }}</button>
+                      <button type="button" class="h-7 px-2.5 rounded-lg bg-white hover:bg-[#0066CC] hover:text-white text-[11px] font-bold cursor-pointer" @click="acceptOrderWithPrep(ord.id, 40)">{{ t.prep40 }}</button>
+                      <button type="button" class="h-7 px-2.5 rounded-lg bg-white hover:bg-[#0066CC] hover:text-white text-[11px] font-bold cursor-pointer" @click="acceptOrderWithPrep(ord.id, 60)">{{ t.prep60 }}</button>
                       <input
                         v-model="customPrepMinutes"
                         type="number"
@@ -1540,14 +1546,15 @@ const selectTab = (id) => {
                     </div>
                   </div>
                 </div>
-                <div v-if="filteredOrders.length === 0" class="p-8 text-center text-xs text-[#6E6E73]">
+
+                <div v-if="filteredOrders.length === 0" class="rounded-2xl bg-white border border-[#E5E5EA] p-8 text-center text-xs text-[#6E6E73]">
                   No orders match the current filter.
                 </div>
               </div>
             </div>
 
             <!-- Order Detail Inspector -->
-            <aside v-if="selectedOrder" class="lg:col-span-5 rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4 lg:sticky lg:top-20">
+            <aside v-if="selectedOrder" class="lg:col-span-5 rounded-2xl bg-white border border-[#E5E5EA] p-5 space-y-4 lg:sticky lg:top-20">
               <div class="flex items-center justify-between border-b border-[#E5E5EA] pb-3">
                 <div>
                   <div class="text-[11px] font-bold text-[#86868B]">{{ t.orderDetails }}</div>
@@ -1631,11 +1638,11 @@ const selectTab = (id) => {
           </div>
         </template>
 
-        <!-- 2. MENU TAB -->
+        <!-- 2. MENU TAB (Flat single-layer cards, zero box-inside-box) -->
         <template v-else-if="activeTab === 'menu'">
-          <div class="space-y-5">
-            <!-- Categories Manager -->
-            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-3">
+          <div class="space-y-4">
+            <!-- Categories Bar -->
+            <div class="rounded-2xl bg-white border border-[#E5E5EA] p-4 sm:p-5 space-y-3">
               <div class="flex flex-wrap items-center justify-between gap-3">
                 <h2 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.categoriesTitle }}</h2>
                 <form class="flex items-center gap-2" @submit.prevent="addCategory">
@@ -1643,7 +1650,7 @@ const selectTab = (id) => {
                     v-model="newCategoryName"
                     type="text"
                     :placeholder="t.categoryPlaceholder"
-                    class="h-9 rounded-full bg-white border border-[#D2D2D7] px-3.5 text-xs focus:border-[#0066CC] focus:outline-none"
+                    class="h-9 rounded-full bg-[#F5F5F7] border border-[#E5E5EA] px-3.5 text-xs focus:bg-white focus:border-[#0066CC] focus:outline-none"
                   />
                   <button
                     type="submit"
@@ -1657,7 +1664,7 @@ const selectTab = (id) => {
                 <div
                   v-for="cat in categories"
                   :key="cat"
-                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F5F5F7] border border-[#E5E5EA] text-xs font-semibold"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F5F5F7] text-xs font-semibold"
                 >
                   <span>{{ cat }}</span>
                   <button
@@ -1672,21 +1679,22 @@ const selectTab = (id) => {
               </div>
             </div>
 
-          <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
-            <div class="flex items-center justify-between gap-3 flex-wrap">
-              <div class="flex items-center gap-2 flex-wrap">
-                <h2 class="text-base font-extrabold text-[#1D1D1F] mr-2">{{ t.navMenu }} ({{ filteredProducts.length }})</h2>
+            <!-- Menu Filter & Add Button directly on page background -->
+            <div class="flex items-center justify-between gap-3 flex-wrap pt-1">
+              <div class="flex items-center gap-1.5 flex-wrap">
                 <button
                   v-for="cat in productCategories"
                   :key="cat"
                   type="button"
                   :class="[
-                    'h-8 px-3 rounded-full text-xs font-semibold cursor-pointer transition-colors',
-                    categoryFilter === cat ? 'bg-[#1D1D1F] text-white' : 'bg-[#F5F5F7] text-[#6E6E73] hover:text-[#1D1D1F]'
+                    'h-8 px-3.5 rounded-full text-xs font-semibold cursor-pointer transition-colors border',
+                    categoryFilter === cat
+                      ? 'bg-[#1D1D1F] text-white border-[#1D1D1F]'
+                      : 'bg-white text-[#6E6E73] border-[#E5E5EA] hover:text-[#1D1D1F]'
                   ]"
                   @click="categoryFilter = cat"
                 >
-                  {{ cat === 'all' ? t.filterAll : cat }}
+                  {{ cat === 'all' ? `${t.filterAll} (${products.length})` : cat }}
                 </button>
               </div>
               <button
@@ -1699,10 +1707,10 @@ const selectTab = (id) => {
               </button>
             </div>
 
-            <!-- Add / Edit Product Form -->
+            <!-- Add / Edit Product Form (Standalone Card) -->
             <form
               v-if="showProductForm"
-              class="p-4 rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+              class="p-5 rounded-2xl bg-white border border-[#E5E5EA] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
               @submit.prevent="saveProductForm"
             >
               <div class="sm:col-span-2">
@@ -1711,14 +1719,14 @@ const selectTab = (id) => {
                   v-model="productForm.name"
                   type="text"
                   required
-                  class="w-full h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
+                  class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] px-3 text-xs focus:bg-white"
                 />
               </div>
               <div>
                 <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">{{ t.category }}</label>
                 <select
                   v-model="productForm.category"
-                  class="w-full h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-semibold"
+                  class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] px-3 text-xs font-semibold"
                 >
                   <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
                 </select>
@@ -1730,7 +1738,7 @@ const selectTab = (id) => {
                   type="number"
                   min="1"
                   required
-                  class="w-full h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono"
+                  class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] px-3 text-xs font-mono focus:bg-white"
                 />
               </div>
               <div class="sm:col-span-2">
@@ -1738,7 +1746,7 @@ const selectTab = (id) => {
                 <input
                   v-model="productForm.description"
                   type="text"
-                  class="w-full h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs"
+                  class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] px-3 text-xs focus:bg-white"
                 />
               </div>
               <div class="sm:col-span-2">
@@ -1748,9 +1756,9 @@ const selectTab = (id) => {
                     v-model="productForm.image"
                     type="text"
                     placeholder="https://..."
-                    class="flex-1 h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono"
+                    class="flex-1 h-10 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] px-3 text-xs font-mono focus:bg-white"
                   />
-                  <label class="h-10 px-3.5 rounded-xl bg-white hover:bg-[#ECECEF] border border-[#D2D2D7] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shrink-0">
+                  <label class="h-10 px-3.5 rounded-xl bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shrink-0">
                     <Upload :size="13" />
                     <span>{{ t.uploadImage }}</span>
                     <input type="file" accept="image/*" class="hidden" @change="handleImageUpload($event, 'product')" />
@@ -1760,7 +1768,7 @@ const selectTab = (id) => {
               <div class="sm:col-span-2 lg:col-span-4 flex justify-end gap-2">
                 <button
                   type="button"
-                  class="h-9 px-4 rounded-full bg-white border border-[#E5E5EA] text-xs font-bold cursor-pointer"
+                  class="h-9 px-4 rounded-full bg-[#F5F5F7] text-xs font-bold cursor-pointer"
                   @click="showProductForm = false"
                 >
                   {{ t.cancel }}
@@ -1774,6 +1782,7 @@ const selectTab = (id) => {
               </div>
             </form>
 
+            <!-- Single-layer Menu Items Card -->
             <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
               <div
                 v-for="p in filteredProducts"
@@ -1781,7 +1790,7 @@ const selectTab = (id) => {
                 class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
               >
                 <div class="flex items-center gap-3 min-w-0">
-                  <div class="h-11 w-11 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] overflow-hidden shrink-0 flex items-center justify-center text-[#86868B]">
+                  <div class="h-11 w-11 rounded-xl bg-[#F5F5F7] overflow-hidden shrink-0 flex items-center justify-center text-[#86868B]">
                     <img v-if="p.image" :src="p.image" :alt="p.name" class="h-full w-full object-cover" />
                     <Utensils v-else :size="16" />
                   </div>
@@ -1825,20 +1834,19 @@ const selectTab = (id) => {
               </div>
             </div>
           </div>
-          </div>
         </template>
 
-        <!-- 4. REPORTS & ANALYTICS TAB -->
+        <!-- 4. REPORTS & ANALYTICS TAB (Single-layer cards, zero box-inside-box) -->
         <template v-else-if="activeTab === 'reports'">
           <div class="space-y-5">
-            <!-- Header: Period Filter (1M / 6M / 1Y) & Excel Export -->
-            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 flex flex-wrap items-center justify-between gap-3">
+            <!-- Header: Period Filter (1M / 6M / 1Y) & Excel Export directly on page background -->
+            <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navReports }}</h2>
+                <h1 class="text-xl font-extrabold text-[#1D1D1F]">{{ t.navReports }}</h1>
                 <p class="text-xs text-[#6E6E73]">{{ store.name }} • {{ t.salesHistory }}</p>
               </div>
               <div class="flex flex-wrap items-center gap-2">
-                <div class="inline-flex items-center p-1 rounded-full bg-[#F5F5F7] border border-[#E5E5EA]">
+                <div class="inline-flex items-center p-1 rounded-full bg-white border border-[#E5E5EA]">
                   <button
                     v-for="p in [
                       { id: 'month', label: t.reportsLastMonth },
@@ -1869,36 +1877,37 @@ const selectTab = (id) => {
 
             <!-- Period Summary KPIs -->
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1">
+              <div class="rounded-2xl bg-white border border-[#E5E5EA] p-5 space-y-1">
                 <div class="text-xs font-semibold text-[#6E6E73]">{{ t.kpiRevenue }}</div>
                 <div class="text-2xl font-extrabold tabular-nums text-[#0066CC]">
                   {{ reportPeriodStats.revenue.toLocaleString('en-US') }} {{ store.currency }}
                 </div>
               </div>
-              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1">
+              <div class="rounded-2xl bg-white border border-[#E5E5EA] p-5 space-y-1">
                 <div class="text-xs font-semibold text-[#6E6E73]">{{ t.ordersCount }}</div>
                 <div class="text-2xl font-extrabold tabular-nums">{{ reportPeriodStats.ordersCount }}</div>
               </div>
-              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1">
+              <div class="rounded-2xl bg-white border border-[#E5E5EA] p-5 space-y-1">
                 <div class="text-xs font-semibold text-[#6E6E73]">{{ t.kpiAvgOrder }}</div>
                 <div class="text-2xl font-extrabold tabular-nums">{{ reportPeriodStats.avgOrder }} {{ store.currency }}</div>
               </div>
-              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-1">
+              <div class="rounded-2xl bg-white border border-[#E5E5EA] p-5 space-y-1">
                 <div class="text-xs font-semibold text-[#6E6E73]">{{ t.navCustomers }}</div>
                 <div class="text-2xl font-extrabold tabular-nums">{{ reportPeriodStats.uniqueCustomers }}</div>
               </div>
             </div>
 
-            <!-- Best-Selling Foods & Customer History -->
+            <!-- Best-Selling Foods & Customer History (Single-layer flat cards) -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <!-- Best-Selling Foods -->
-              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-3">
-                <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.bestSellingFoods }}</h3>
-                <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
+              <div class="rounded-2xl bg-white border border-[#E5E5EA] overflow-hidden">
+                <div class="px-5 py-4 border-b border-[#E5E5EA]">
+                  <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.bestSellingFoods }}</h3>
+                </div>
+                <div class="divide-y divide-[#E5E5EA]">
                   <div
                     v-for="(item, idx) in bestSellingFoods"
                     :key="item.name"
-                    class="px-4 py-3 space-y-1.5 text-xs"
+                    class="px-5 py-3.5 space-y-1.5 text-xs"
                   >
                     <div class="flex items-center justify-between gap-2">
                       <div class="flex items-center gap-2.5 min-w-0">
@@ -1922,14 +1931,15 @@ const selectTab = (id) => {
                 </div>
               </div>
 
-              <!-- Customer History & Analytics -->
-              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-3">
-                <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.customerAnalytics }} ({{ customersList.length }})</h3>
-                <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
+              <div class="rounded-2xl bg-white border border-[#E5E5EA] overflow-hidden">
+                <div class="px-5 py-4 border-b border-[#E5E5EA]">
+                  <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.customerAnalytics }} ({{ customersList.length }})</h3>
+                </div>
+                <div class="divide-y divide-[#E5E5EA]">
                   <div
                     v-for="c in customersList"
                     :key="c.phone || c.name"
-                    class="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                    class="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
                   >
                     <div>
                       <div class="text-xs font-bold text-[#1D1D1F]">{{ c.name }}</div>
@@ -1941,117 +1951,116 @@ const selectTab = (id) => {
                     </div>
                   </div>
                 </div>
-                <div v-if="filteredOrders.length === 0" class="p-8 text-center text-xs text-[#6E6E73]">
-                  No orders match the current filter.
-                </div>
               </div>
             </div>
 
-            <!-- Complete Sales & Order History -->
-            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-3">
-              <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.salesHistory }} ({{ orders.length }})</h3>
-              <div class="overflow-x-auto border border-[#E5E5EA] rounded-2xl bg-white">
+            <!-- Complete Sales & Order History (Single-layer flat card) -->
+            <div class="rounded-2xl bg-white border border-[#E5E5EA] overflow-hidden">
+              <div class="px-5 py-4 border-b border-[#E5E5EA]">
+                <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.salesHistory }} ({{ orders.length }})</h3>
+              </div>
+              <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs">
                   <thead class="bg-[#F5F5F7] text-[#6E6E73] text-[11px] uppercase">
                     <tr>
-                      <th class="px-4 py-2.5 font-bold">Order</th>
+                      <th class="px-5 py-2.5 font-bold">Order</th>
                       <th class="px-4 py-2.5 font-bold">Customer</th>
                       <th class="px-4 py-2.5 font-bold">Type</th>
                       <th class="px-4 py-2.5 font-bold">Items</th>
                       <th class="px-4 py-2.5 font-bold">Status</th>
-                      <th class="px-4 py-2.5 font-bold text-right">Total</th>
+                      <th class="px-5 py-2.5 font-bold text-right">Total</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-[#E5E5EA]">
                     <tr v-for="o in orders" :key="o.id" class="hover:bg-[#F5F5F7]/60">
-                      <td class="px-4 py-2.5 font-mono font-bold">{{ o.id }}</td>
-                      <td class="px-4 py-2.5">{{ o.customer }}</td>
-                      <td class="px-4 py-2.5">{{ o.deliveryType === 'Delivery' ? 'Delivery' : 'Takeaway' }}</td>
-                      <td class="px-4 py-2.5 text-[#6E6E73]">{{ o.lines.map((l) => `${l.qty}x ${l.name}`).join(', ') }}</td>
-                      <td class="px-4 py-2.5">
+                      <td class="px-5 py-3 font-mono font-bold">{{ o.id }}</td>
+                      <td class="px-4 py-3">{{ o.customer }}</td>
+                      <td class="px-4 py-3">{{ o.deliveryType === 'Delivery' ? 'Delivery' : 'Takeaway' }}</td>
+                      <td class="px-4 py-3 text-[#6E6E73]">{{ o.lines.map((l) => `${l.qty}x ${l.name}`).join(', ') }}</td>
+                      <td class="px-4 py-3">
                         <span :class="['px-2 py-0.5 rounded-full text-[10px] font-bold border', statusBadgeClass(o.status)]">
                           {{ statusLabel(o.status) }}
                         </span>
                       </td>
-                      <td class="px-4 py-2.5 font-extrabold tabular-nums text-right">{{ o.total }} {{ store.currency }}</td>
+                      <td class="px-5 py-3 font-extrabold tabular-nums text-right">{{ o.total }} {{ store.currency }}</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
             </div>
 
-            <!-- Discount Codes -->
-          <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4">
-            <div class="flex items-center justify-between gap-3 flex-wrap">
-              <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.navCoupons }} ({{ coupons.length }})</h3>
-              <button
-                type="button"
-                class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
-                @click="showCouponForm = !showCouponForm"
-              >
-                <Plus :size="14" />
-                <span>{{ t.addCoupon }}</span>
-              </button>
-            </div>
+            <!-- Discount Codes (Single-layer flat card) -->
+            <div class="rounded-2xl bg-white border border-[#E5E5EA] overflow-hidden">
+              <div class="px-5 py-4 border-b border-[#E5E5EA] flex items-center justify-between gap-3 flex-wrap">
+                <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.navCoupons }} ({{ coupons.length }})</h3>
+                <button
+                  type="button"
+                  class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                  @click="showCouponForm = !showCouponForm"
+                >
+                  <Plus :size="14" />
+                  <span>{{ t.addCoupon }}</span>
+                </button>
+              </div>
 
-            <form
-              v-if="showCouponForm"
-              class="p-4 rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] grid grid-cols-1 sm:grid-cols-3 gap-3"
-              @submit.prevent="addCouponItem"
-            >
-              <input
-                v-model="couponForm.code"
-                type="text"
-                required
-                :placeholder="t.couponCode"
-                class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono uppercase"
-              />
-              <input
-                v-model="couponForm.percent"
-                type="number"
-                min="1"
-                max="90"
-                required
-                :placeholder="t.discountPercent"
-                class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono"
-              />
-              <button type="submit" class="h-10 rounded-xl bg-[#0066CC] text-white text-xs font-bold cursor-pointer">
-                {{ t.save }}
-              </button>
-            </form>
-
-            <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
-              <div
-                v-for="c in coupons"
-                :key="c.id"
-                class="p-4 flex items-center justify-between gap-3"
+              <form
+                v-if="showCouponForm"
+                class="p-4 bg-[#F5F5F7] border-b border-[#E5E5EA] grid grid-cols-1 sm:grid-cols-3 gap-3"
+                @submit.prevent="addCouponItem"
               >
-                <div class="flex items-center gap-3">
-                  <span class="font-mono text-xs font-extrabold px-2.5 py-1 rounded-lg bg-[#F5F5F7] border border-[#E5E5EA]">{{ c.code }}</span>
-                  <span class="text-xs font-bold text-[#0066CC]">-{{ c.percent }}%</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <button
-                    type="button"
-                    :class="[
-                      'h-8 px-3 rounded-full text-[11px] font-bold border cursor-pointer',
-                      c.active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-stone-100 text-stone-600 border-stone-200'
-                    ]"
-                    @click="toggleCoupon(c.id)"
-                  >
-                    {{ c.active ? t.available : t.unavailable }}
-                  </button>
-                  <button
-                    type="button"
-                    class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center cursor-pointer"
-                    @click="deleteCoupon(c.id)"
-                  >
-                    <Trash2 :size="13" />
-                  </button>
+                <input
+                  v-model="couponForm.code"
+                  type="text"
+                  required
+                  :placeholder="t.couponCode"
+                  class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono uppercase"
+                />
+                <input
+                  v-model="couponForm.percent"
+                  type="number"
+                  min="1"
+                  max="90"
+                  required
+                  :placeholder="t.discountPercent"
+                  class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono"
+                />
+                <button type="submit" class="h-10 rounded-xl bg-[#0066CC] text-white text-xs font-bold cursor-pointer">
+                  {{ t.save }}
+                </button>
+              </form>
+
+              <div class="divide-y divide-[#E5E5EA]">
+                <div
+                  v-for="c in coupons"
+                  :key="c.id"
+                  class="px-5 py-3.5 flex items-center justify-between gap-3"
+                >
+                  <div class="flex items-center gap-3">
+                    <span class="font-mono text-xs font-extrabold px-2.5 py-1 rounded-lg bg-[#F5F5F7]">{{ c.code }}</span>
+                    <span class="text-xs font-bold text-[#0066CC]">-{{ c.percent }}%</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      :class="[
+                        'h-8 px-3 rounded-full text-[11px] font-bold border cursor-pointer',
+                        c.active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-stone-100 text-stone-600 border-stone-200'
+                      ]"
+                      @click="toggleCoupon(c.id)"
+                    >
+                      {{ c.active ? t.available : t.unavailable }}
+                    </button>
+                    <button
+                      type="button"
+                      class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center cursor-pointer"
+                      @click="deleteCoupon(c.id)"
+                    >
+                      <Trash2 :size="13" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
           </div>
         </template>
 
@@ -2240,7 +2249,7 @@ const selectTab = (id) => {
 
                 <form
                   v-if="showZoneForm"
-                  class="p-4 rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"
+                  class="p-4 rounded-xl bg-[#F5F5F7] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"
                   @submit.prevent="addShippingZone"
                 >
                   <input v-model="zoneForm.name" type="text" required :placeholder="t.zoneName" class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs" />
@@ -2249,9 +2258,15 @@ const selectTab = (id) => {
                   <input v-model="zoneForm.color" type="color" class="h-10 w-full rounded-xl border border-[#D2D2D7] bg-white px-1 cursor-pointer" />
                   <button type="submit" class="h-10 px-4 rounded-xl bg-[#0066CC] text-white text-xs font-bold cursor-pointer">{{ t.save }}</button>
                 </form>
+              </div>
 
-                <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
-                  <div v-for="z in shippingZones" :key="z.id" class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <!-- Standalone Single-Layer Delivery Zones Card -->
+              <div class="rounded-2xl bg-white border border-[#E5E5EA] overflow-hidden">
+                <div class="px-5 py-3.5 border-b border-[#E5E5EA] flex items-center justify-between">
+                  <h3 class="text-sm font-extrabold text-[#1D1D1F]">{{ t.shippingZones }} ({{ shippingZones.length }})</h3>
+                </div>
+                <div class="divide-y divide-[#E5E5EA]">
+                  <div v-for="z in shippingZones" :key="z.id" class="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div class="flex items-center gap-3">
                       <span class="h-3.5 w-3.5 rounded-full shrink-0" :style="{ backgroundColor: z.color || '#0066CC' }" />
                       <div>
@@ -2401,9 +2416,9 @@ const selectTab = (id) => {
               </button>
             </div>
 
-            <!-- SUB-TAB: REST API & Frontend Selling -->
+            <!-- SUB-TAB: REST API & Frontend Selling (Flat single-layer cards) -->
             <div v-if="settingsSubTab === 'api'" class="space-y-5">
-              <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-4">
+              <div class="rounded-2xl bg-white border border-[#E5E5EA] p-6 space-y-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h2 class="text-base font-extrabold text-[#1D1D1F] flex items-center gap-2">
@@ -2425,7 +2440,7 @@ const selectTab = (id) => {
                     <button
                       type="button"
                       :disabled="workerSyncing || !workerBaseUrl"
-                      class="h-9 px-4 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] disabled:opacity-50 text-xs font-bold cursor-pointer"
+                      class="h-9 px-4 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] disabled:opacity-50 text-xs font-bold cursor-pointer"
                       @click="pullFromWorker"
                     >
                       Pull Live Orders
@@ -2433,27 +2448,32 @@ const selectTab = (id) => {
                   </div>
                 </div>
 
-                <div v-if="workerSyncMsg" class="p-3 rounded-xl bg-blue-50 border border-blue-200 text-[#0066CC] text-xs font-semibold">
+                <div v-if="workerSyncMsg" class="p-3 rounded-xl bg-blue-50 text-[#0066CC] text-xs font-semibold">
                   {{ workerSyncMsg }}
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">Worker URL</label>
-                    <input v-model="installation.workerUrl" type="url" placeholder="https://linksho-site-....workers.dev" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-mono" />
+                    <input v-model="installation.workerUrl" type="url" placeholder="https://linksho-site-....workers.dev" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] px-3 text-xs font-mono" />
                   </div>
                   <div>
                     <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">Public API Key</label>
-                    <input v-model="installation.apiKey" type="text" placeholder="sk_live_..." class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-mono" />
+                    <input v-model="installation.apiKey" type="text" placeholder="sk_live_..." class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] px-3 text-xs font-mono" />
                   </div>
                   <div>
                     <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">Admin Seller PIN</label>
-                    <input v-model="installation.pinCode" type="password" placeholder="PIN" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-mono" />
+                    <input v-model="installation.pinCode" type="password" placeholder="PIN" class="w-full h-10 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] px-3 text-xs font-mono" />
                   </div>
                 </div>
+              </div>
 
-                <!-- Copyable Endpoints -->
-                <div class="space-y-2.5 pt-2">
+              <!-- Standalone Endpoints Card (flat rows with divide-y, zero nested boxes) -->
+              <div class="rounded-2xl bg-white border border-[#E5E5EA] overflow-hidden">
+                <div class="px-5 py-3.5 border-b border-[#E5E5EA]">
+                  <h3 class="text-sm font-extrabold text-[#1D1D1F]">REST API Endpoints</h3>
+                </div>
+                <div class="divide-y divide-[#E5E5EA]">
                   <div
                     v-for="ep in [
                       { method: 'GET', label: 'Show Menu, Categories, Delivery Zones & Stripe Key on Frontend', url: `${workerBaseUrl || 'https://your-worker.workers.dev'}/api/storefront?key=${installation.apiKey || 'YOUR_API_KEY'}` },
@@ -2465,7 +2485,7 @@ const selectTab = (id) => {
                       { method: 'GET', label: 'Show Order Status & Preparation Time on Customer Website', url: `${workerBaseUrl || 'https://your-worker.workers.dev'}/api/orders/status?id=ORD-XXXX&key=${installation.apiKey || 'YOUR_API_KEY'}` },
                     ]"
                     :key="ep.url"
-                    class="p-3 rounded-xl bg-[#F5F5F7] border border-[#E5E5EA] flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                    class="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
                   >
                     <div class="min-w-0 space-y-0.5">
                       <div class="flex items-center gap-2">
@@ -2474,7 +2494,7 @@ const selectTab = (id) => {
                       </div>
                       <div class="text-[11px] font-mono text-[#6E6E73] truncate">{{ ep.url }}</div>
                     </div>
-                    <button type="button" class="h-8 px-3 rounded-lg bg-white hover:bg-[#ECECEF] border border-[#D2D2D7] text-[11px] font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer" @click="copyText(ep.url)">
+                    <button type="button" class="h-8 px-3 rounded-lg bg-[#F5F5F7] hover:bg-[#ECECEF] text-[11px] font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer" @click="copyText(ep.url)">
                       <Copy :size="12" />
                       <span>Copy</span>
                     </button>
@@ -2484,10 +2504,10 @@ const selectTab = (id) => {
 
               <!-- Frontend Integration Code & Live JSON Preview -->
               <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-3">
+                <div class="rounded-2xl bg-white border border-[#E5E5EA] p-5 space-y-3">
                   <div class="flex items-center justify-between">
                     <h3 class="text-sm font-extrabold text-[#1D1D1F]">Frontend JavaScript Example</h3>
-                    <button type="button" class="h-8 px-3 rounded-lg bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer" @click="copyText(frontendFetchSnippet)">
+                    <button type="button" class="h-8 px-3 rounded-lg bg-[#F5F5F7] hover:bg-[#ECECEF] text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer" @click="copyText(frontendFetchSnippet)">
                       <Copy :size="12" />
                       <span>Copy Code</span>
                     </button>
@@ -2495,10 +2515,10 @@ const selectTab = (id) => {
                   <pre class="p-3.5 rounded-xl bg-[#1D1D1F] text-[#F5F5F7] text-[11px] font-mono overflow-x-auto leading-relaxed max-h-72">{{ frontendFetchSnippet }}</pre>
                 </div>
 
-                <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-3">
+                <div class="rounded-2xl bg-white border border-[#E5E5EA] p-5 space-y-3">
                   <div class="flex items-center justify-between">
                     <h3 class="text-sm font-extrabold text-[#1D1D1F]">Live /api/storefront JSON Preview</h3>
-                    <button type="button" class="h-8 px-3 rounded-lg bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer" @click="copyText(storefrontPreviewJson)">
+                    <button type="button" class="h-8 px-3 rounded-lg bg-[#F5F5F7] hover:bg-[#ECECEF] text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer" @click="copyText(storefrontPreviewJson)">
                       <Copy :size="12" />
                       <span>Copy JSON</span>
                     </button>
