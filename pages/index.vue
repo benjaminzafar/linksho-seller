@@ -42,8 +42,7 @@ import {
 } from 'lucide-vue-next';
 import { SELLER_LANGUAGES, TRANSLATIONS } from '~/utils/i18n';
 
-const STORAGE_KEY = 'seller_pannel_v4';
-const LEGACY_STORAGE_KEY = 'seller_pannel_v3';
+const STORAGE_KEY = 'seller_pannel_v5';
 
 const lang = ref('en');
 const activeTab = ref('orders'); // 'orders' | 'menu' | 'delivery' | 'reports' | 'settings'
@@ -183,13 +182,6 @@ const installDeploying = ref(false);
 const installError = ref('');
 const cfDeployToken = ref('');
 const cfDeployEmail = ref('');
-const showNewRestaurantModal = ref(false);
-const newRestaurantForm = ref({
-  name: '',
-  country: 'se',
-  phone: '',
-  address: '',
-});
 
 const products = ref([
   { id: 'PRD-101', name: 'Grilled Lamb Plate', category: 'Main Course', price: 169, available: true, description: 'Served with rice and grilled tomato', image: '' },
@@ -253,11 +245,11 @@ const orders = ref([
     shipping: 49,
     total: 526,
     payment: 'Stripe',
-    status: 'ready',
-    prepMinutes: 40,
-    estimatedReadyAt: '18:55',
-    time: '32m ago',
-    createdAt: daysAgoIso(2),
+    status: 'pending',
+    prepMinutes: null,
+    estimatedReadyAt: '',
+    time: '8m ago',
+    createdAt: daysAgoIso(0),
   },
   {
     id: 'ORD-4818',
@@ -328,241 +320,6 @@ const productForm = ref({ name: '', category: 'Main Course', price: '', descript
 
 const t = computed(() => ({ ...TRANSLATIONS.en, ...(TRANSLATIONS[lang.value] || {}) }));
 
-const cloneData = (v) => JSON.parse(JSON.stringify(v));
-
-const buildDefaultGothenburgPanel = () => ({
-  id: 'rest-gothenburg',
-  store: {
-    name: 'Gothenburg Grill',
-    type: 'restaurant',
-    country: 'se',
-    storefrontLangs: ['en', 'sv'],
-    logoUrl: '',
-    bannerUrl: '',
-    brandColor: '#059669',
-    isOpen: true,
-    currency: 'SEK',
-    shippingFee: 39,
-    freeShippingOver: 450,
-    phone: '+46 31 555 20 10',
-    address: 'Kungsportsavenyn 18, Gothenburg',
-    customDomain: 'order.gothenburggrill.se',
-    orgNumber: '559112-4401',
-    instagram: '@gothenburggrill',
-    receiptNote: 'Tack för din beställning!',
-  },
-  restaurantConfig: {
-    prepTime: 30,
-    minOrder: 120,
-    maxDeliveryKm: 8,
-    openingHours: 'Mon-Sun 11:00 - 23:00',
-    pickupEnabled: true,
-    deliveryEnabled: true,
-  },
-  categories: ['Main Course', 'Sides', 'Drinks'],
-  shippingZones: [
-    {
-      id: 'ZN-G1',
-      name: 'Avenyn & Centrum',
-      range: '0 - 4 km',
-      price: 39,
-      estTime: '20-30 min',
-      color: '#059669',
-      points: [
-        [57.710, 11.962],
-        [57.712, 11.988],
-        [57.694, 11.990],
-        [57.692, 11.960],
-      ],
-    },
-  ],
-  products: [
-    { id: 'PRD-201', name: 'Charcoal Koobideh Plate', category: 'Main Course', price: 175, available: true, description: 'Two skewers with saffron basmati rice', image: '' },
-    { id: 'PRD-202', name: 'Saffron Joojeh Wrap', category: 'Main Course', price: 129, available: true, description: 'Grilled chicken fillet in flatbread', image: '' },
-    { id: 'PRD-203', name: 'Crispy Fries & Garlic Dip', category: 'Sides', price: 49, available: true, description: 'Seasoned house fries', image: '' },
-    { id: 'PRD-204', name: 'Ayran Yogurt Drink', category: 'Drinks', price: 29, available: true, description: 'Chilled 330ml', image: '' },
-  ],
-  orders: [
-    {
-      id: 'ORD-5102',
-      customer: 'Astrid Lind',
-      phone: '+46 70 812 33 10',
-      address: 'Vasagatan 12, Gothenburg',
-      deliveryType: 'Delivery',
-      lines: [{ name: 'Charcoal Koobideh Plate', qty: 2, price: 175 }],
-      subtotal: 350,
-      shipping: 39,
-      total: 389,
-      payment: 'Stripe',
-      status: 'pending',
-      time: '6m ago',
-    },
-    {
-      id: 'ORD-5101',
-      customer: 'Henrik Ek',
-      phone: '+46 73 410 92 88',
-      address: 'Pickup at store',
-      deliveryType: 'Pickup',
-      lines: [{ name: 'Saffron Joojeh Wrap', qty: 2, price: 129 }],
-      subtotal: 258,
-      shipping: 0,
-      total: 258,
-      payment: 'Stripe',
-      status: 'ready',
-      time: '22m ago',
-    },
-  ],
-  coupons: [{ id: 'CPN-G1', code: 'GBG15', percent: 15, active: true }],
-  stripeConfig: { mode: 'live', publishableKey: '' },
-  telegramConfig: { botToken: '', chatId: '' },
-  smtpConfig: { host: 'smtp.gmail.com', port: 587, security: 'TLS', username: '', password: '', fromEmail: 'orders@gothenburggrill.se' },
-  installation: { installed: false, workerUrl: '', apiKey: '', pinCode: '', installedAt: '' },
-});
-
-const activePanelId = ref('rest-stockholm');
-const restaurantPanels = ref([
-  {
-    id: 'rest-stockholm',
-    store: cloneData(store.value),
-    restaurantConfig: cloneData(restaurantConfig.value),
-    shippingZones: cloneData(shippingZones.value),
-    categories: cloneData(categories.value),
-    products: cloneData(products.value),
-    orders: cloneData(orders.value),
-    coupons: cloneData(coupons.value),
-    stripeConfig: cloneData(stripeConfig.value),
-    telegramConfig: cloneData(telegramConfig.value),
-    smtpConfig: cloneData(smtpConfig.value),
-    installation: cloneData(installation.value),
-  },
-  buildDefaultGothenburgPanel(),
-]);
-
-const isSwitchingPanel = ref(false);
-
-const syncCurrentPanelToList = () => {
-  const idx = restaurantPanels.value.findIndex((p) => p.id === activePanelId.value);
-  const snapshot = {
-    id: activePanelId.value,
-    store: cloneData({ ...store.value, type: 'restaurant' }),
-    restaurantConfig: cloneData(restaurantConfig.value),
-    shippingZones: cloneData(shippingZones.value),
-    categories: cloneData(categories.value),
-    products: cloneData(products.value),
-    orders: cloneData(orders.value),
-    coupons: cloneData(coupons.value),
-    stripeConfig: cloneData(stripeConfig.value),
-    telegramConfig: cloneData(telegramConfig.value),
-    smtpConfig: cloneData(smtpConfig.value),
-    installation: cloneData(installation.value),
-  };
-  if (idx >= 0) {
-    restaurantPanels.value[idx] = snapshot;
-  }
-};
-
-const loadPanelIntoRefs = (panel) => {
-  if (!panel) return;
-  isSwitchingPanel.value = true;
-  store.value = cloneData({ ...panel.store, type: 'restaurant' });
-  restaurantConfig.value = cloneData(panel.restaurantConfig);
-  shippingZones.value = cloneData(panel.shippingZones || []);
-  categories.value = cloneData(panel.categories || ['Main Course', 'Sides', 'Desserts', 'Drinks']);
-  products.value = cloneData(panel.products || []);
-  orders.value = cloneData(panel.orders || []);
-  coupons.value = cloneData(panel.coupons || []);
-  stripeConfig.value = cloneData(panel.stripeConfig || { mode: 'live', publishableKey: '' });
-  telegramConfig.value = cloneData(panel.telegramConfig || { botToken: '', chatId: '' });
-  smtpConfig.value = cloneData(panel.smtpConfig || { host: 'smtp.gmail.com', port: 587, security: 'TLS', username: '', password: '', fromEmail: '' });
-  installation.value = cloneData(panel.installation || { installed: false, workerUrl: '', apiKey: '', pinCode: '', installedAt: '' });
-  selectedOrderId.value = '';
-  draftPoints.value = [];
-  showZoneForm.value = false;
-  showProductForm.value = false;
-  isSwitchingPanel.value = false;
-};
-
-const switchRestaurantPanel = (id) => {
-  if (!id || id === activePanelId.value) return;
-  syncCurrentPanelToList();
-  const target = restaurantPanels.value.find((p) => p.id === id);
-  if (!target) return;
-  activePanelId.value = id;
-  loadPanelIntoRefs(target);
-  if (activeTab.value === 'delivery') {
-    setTimeout(() => initDeliveryMap(), 60);
-  }
-  showToast(`${target.store.name}`);
-};
-
-const createRestaurantPanel = () => {
-  const cleanName = newRestaurantForm.value.name.trim();
-  if (!cleanName) return;
-  syncCurrentPanelToList();
-  const countryObj = STORE_COUNTRIES.find((c) => c.id === newRestaurantForm.value.country) || STORE_COUNTRIES[0];
-  const newId = `rest-${Date.now().toString(36)}`;
-  const slug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 20) || 'restaurant';
-  const newPanel = {
-    id: newId,
-    store: {
-      name: cleanName,
-      type: 'restaurant',
-      country: countryObj.id,
-      storefrontLangs: ['en', countryObj.lang],
-      logoUrl: '',
-      bannerUrl: '',
-      brandColor: '#0066CC',
-      isOpen: true,
-      currency: countryObj.currency,
-      shippingFee: 49,
-      freeShippingOver: 500,
-      phone: newRestaurantForm.value.phone.trim() || '+46 70 000 00 00',
-      address: newRestaurantForm.value.address.trim() || countryObj.name,
-      customDomain: `order.${slug}.se`,
-      orgNumber: '',
-      instagram: `@${slug}`,
-      receiptNote: 'Thank you for your order!',
-    },
-    restaurantConfig: {
-      prepTime: 30,
-      minOrder: 150,
-      maxDeliveryKm: 10,
-      openingHours: 'Mon-Sun 11:00 - 22:00',
-      pickupEnabled: true,
-      deliveryEnabled: true,
-    },
-    shippingZones: [],
-    categories: ['Main Course', 'Sides', 'Desserts', 'Drinks'],
-    products: [],
-    orders: [],
-    coupons: [],
-    stripeConfig: { mode: 'live', publishableKey: '' },
-    telegramConfig: { botToken: '', chatId: '' },
-    smtpConfig: { host: 'smtp.gmail.com', port: 587, security: 'TLS', username: '', password: '', fromEmail: `orders@${slug}.se` },
-    installation: { installed: false, workerUrl: '', apiKey: '', pinCode: '', installedAt: '' },
-  };
-  restaurantPanels.value = [...restaurantPanels.value, newPanel];
-  activePanelId.value = newId;
-  loadPanelIntoRefs(newPanel);
-  newRestaurantForm.value = { name: '', country: 'se', phone: '', address: '' };
-  showNewRestaurantModal.value = false;
-  activeTab.value = 'orders';
-  wizardStep.value = 1;
-  showSetupWizard.value = true;
-  showToast(cleanName);
-};
-
-const deleteRestaurantPanel = (id) => {
-  if (restaurantPanels.value.length <= 1) return;
-  restaurantPanels.value = restaurantPanels.value.filter((p) => p.id !== id);
-  if (activePanelId.value === id) {
-    const next = restaurantPanels.value[0];
-    activePanelId.value = next.id;
-    loadPanelIntoRefs(next);
-  }
-  showToast(t.value.savedToast);
-};
-
 const copyText = async (val) => {
   if (!val) return;
   try {
@@ -632,52 +389,47 @@ onMounted(() => {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed.lang && TRANSLATIONS[parsed.lang]) lang.value = parsed.lang;
-      if (Array.isArray(parsed.restaurantPanels) && parsed.restaurantPanels.length > 0) {
-        restaurantPanels.value = parsed.restaurantPanels;
-        const targetId = parsed.activePanelId && parsed.restaurantPanels.some((p) => p.id === parsed.activePanelId)
-          ? parsed.activePanelId
-          : parsed.restaurantPanels[0].id;
-        activePanelId.value = targetId;
-        loadPanelIntoRefs(parsed.restaurantPanels.find((p) => p.id === targetId));
-        if (!installation.value.setupCompleted) {
-          wizardStep.value = 1;
-          showSetupWizard.value = true;
-        }
-      }
-      return;
-    }
-    wizardStep.value = 1;
-    showSetupWizard.value = true;
-    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (legacy) {
-      const parsed = JSON.parse(legacy);
-      if (parsed.lang && TRANSLATIONS[parsed.lang]) lang.value = parsed.lang;
       if (parsed.store) store.value = { ...store.value, ...parsed.store, type: 'restaurant' };
       if (parsed.stripeConfig) stripeConfig.value = { ...stripeConfig.value, ...parsed.stripeConfig };
       if (parsed.telegramConfig) telegramConfig.value = { ...telegramConfig.value, ...parsed.telegramConfig };
       if (parsed.smtpConfig) smtpConfig.value = { ...smtpConfig.value, ...parsed.smtpConfig };
       if (Array.isArray(parsed.shippingZones)) shippingZones.value = parsed.shippingZones;
+      if (Array.isArray(parsed.categories)) categories.value = parsed.categories;
       if (Array.isArray(parsed.coupons)) coupons.value = parsed.coupons;
       if (parsed.restaurantConfig) restaurantConfig.value = { ...restaurantConfig.value, ...parsed.restaurantConfig };
       if (Array.isArray(parsed.products)) products.value = parsed.products;
       if (Array.isArray(parsed.orders)) orders.value = parsed.orders;
-      syncCurrentPanelToList();
+      if (parsed.installation) installation.value = { ...installation.value, ...parsed.installation };
+      if (!installation.value.setupCompleted) {
+        wizardStep.value = 1;
+        showSetupWizard.value = true;
+      }
+      return;
     }
+    wizardStep.value = 1;
+    showSetupWizard.value = true;
   } catch {}
 });
 
 watch(
-  [lang, activePanelId, store, stripeConfig, telegramConfig, smtpConfig, shippingZones, categories, coupons, restaurantConfig, products, orders, installation],
+  [lang, store, stripeConfig, telegramConfig, smtpConfig, shippingZones, categories, coupons, restaurantConfig, products, orders, installation],
   () => {
-    if (isSwitchingPanel.value) return;
     try {
-      syncCurrentPanelToList();
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
           lang: lang.value,
-          activePanelId: activePanelId.value,
-          restaurantPanels: restaurantPanels.value,
+          store: store.value,
+          stripeConfig: stripeConfig.value,
+          telegramConfig: telegramConfig.value,
+          smtpConfig: smtpConfig.value,
+          shippingZones: shippingZones.value,
+          categories: categories.value,
+          coupons: coupons.value,
+          restaurantConfig: restaurantConfig.value,
+          products: products.value,
+          orders: orders.value,
+          installation: installation.value,
         })
       );
     } catch {}
@@ -694,7 +446,7 @@ const maxChartAmount = computed(() =>
 );
 
 const activeOrdersCount = computed(() =>
-  orders.value.filter((o) => ['pending', 'preparing', 'ready'].includes(o.status)).length
+  orders.value.filter((o) => ['pending', 'preparing'].includes(o.status)).length
 );
 
 const avgOrderValue = computed(() => {
@@ -780,8 +532,8 @@ const statusBadgeClass = (status) => {
 const statusLabel = (status) => {
   const map = {
     pending: t.value.statusPending,
-    preparing: t.value.statusPreparing,
-    ready: t.value.statusReady,
+    preparing: 'Accepted',
+    ready: 'Accepted',
     delivered: t.value.statusDelivered,
     cancelled: t.value.statusRejected || t.value.statusCancelled,
   };
@@ -980,7 +732,7 @@ const renderMapZones = () => {
   if (!L || !leafletMap || !zoneLayerGroup || !draftLayerGroup) return;
 
   zoneLayerGroup.clearLayers();
-  const centerLatLng = activePanelId.value === 'rest-gothenburg' ? [57.7089, 11.9746] : [59.3293, 18.0686];
+  const centerLatLng = [59.3293, 18.0686];
   const maxKm = Math.max(1, Number(restaurantConfig.value.maxDeliveryKm) || 10);
   L.circle(centerLatLng, {
     radius: maxKm * 1000,
@@ -2892,53 +2644,6 @@ npx wrangler deploy  # Deploy panel to Cloudflare Workers</pre>
           </div>
         </template>
       </main>
-    </div>
-
-    <!-- New Restaurant Panel Modal -->
-    <div
-      v-if="showNewRestaurantModal"
-      class="fixed inset-0 z-50 bg-black/35 backdrop-blur-xs flex items-center justify-center p-4"
-      @click.self="showNewRestaurantModal = false"
-    >
-      <form
-        class="w-full max-w-md rounded-3xl bg-white border border-[#E5E5EA] p-6 space-y-4 shadow-xl"
-        @submit.prevent="createRestaurantPanel"
-      >
-        <div class="flex items-center justify-between">
-          <h3 class="text-base font-extrabold text-[#1D1D1F]">{{ t.addRestaurant }}</h3>
-          <button type="button" class="h-8 w-8 rounded-full hover:bg-[#F5F5F7] flex items-center justify-center cursor-pointer" @click="showNewRestaurantModal = false">
-            <X :size="16" />
-          </button>
-        </div>
-        <div class="space-y-3">
-          <div>
-            <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.storeName }}</label>
-            <input v-model="newRestaurantForm.name" type="text" required placeholder="e.g. Malmö Kebab House" class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs" />
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.country }}</label>
-            <select v-model="newRestaurantForm.country" class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold">
-              <option v-for="c in STORE_COUNTRIES" :key="c.id" :value="c.id">{{ c.name }} ({{ c.currency }})</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.phone }}</label>
-            <input v-model="newRestaurantForm.phone" type="text" placeholder="+46 70 000 00 00" class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono" />
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-[#1D1D1F] mb-1">{{ t.address }}</label>
-            <input v-model="newRestaurantForm.address" type="text" placeholder="Storgatan 10, Malmö" class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs" />
-          </div>
-        </div>
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" class="h-10 px-4 rounded-full bg-[#F5F5F7] text-xs font-bold cursor-pointer" @click="showNewRestaurantModal = false">
-            {{ t.cancel }}
-          </button>
-          <button type="submit" class="h-10 px-5 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer">
-            {{ t.addRestaurant }}
-          </button>
-        </div>
-      </form>
     </div>
 
     <!-- First-Time Setup Wizard Modal (Next -> Next -> Finish) -->
