@@ -28,6 +28,8 @@ import {
   Mail,
   Eye,
   EyeOff,
+  Upload,
+  Tag,
 } from 'lucide-vue-next';
 import { SELLER_LANGUAGES, TRANSLATIONS } from '~/utils/i18n';
 
@@ -43,9 +45,25 @@ const categoryFilter = ref('all');
 const selectedOrderId = ref('');
 const toastMsg = ref('');
 
+const STORE_COUNTRIES = [
+  { id: 'se', name: 'Sweden', currency: 'SEK', lang: 'sv' },
+  { id: 'no', name: 'Norway', currency: 'NOK', lang: 'no' },
+  { id: 'dk', name: 'Denmark', currency: 'DKK', lang: 'da' },
+  { id: 'fi', name: 'Finland', currency: 'EUR', lang: 'fi' },
+  { id: 'de', name: 'Germany', currency: 'EUR', lang: 'de' },
+  { id: 'at', name: 'Austria', currency: 'EUR', lang: 'de' },
+  { id: 'nl', name: 'Netherlands', currency: 'EUR', lang: 'nl' },
+  { id: 'fr', name: 'France', currency: 'EUR', lang: 'fr' },
+];
+
 const store = ref({
   name: 'Stockholm Bistro',
   type: 'restaurant',
+  country: 'se',
+  storefrontLangs: ['en', 'sv'],
+  logoUrl: '',
+  bannerUrl: '',
+  brandColor: '#0066CC',
   isOpen: true,
   currency: 'SEK',
   shippingFee: 49,
@@ -53,7 +71,16 @@ const store = ref({
   phone: '+46 70 123 45 67',
   address: 'Sveavägen 42, Stockholm',
   customDomain: 'order.stockholmbistro.se',
+  orgNumber: '559000-0000',
+  instagram: '@stockholmbistro',
+  receiptNote: 'Thank you for your order!',
 });
+
+const coupons = ref([
+  { id: 'CPN-1', code: 'WELCOME10', percent: 10, active: true },
+]);
+const showCouponForm = ref(false);
+const couponForm = ref({ code: '', percent: '' });
 
 const stripeConfig = ref({
   mode: 'live',
@@ -206,6 +233,7 @@ onMounted(() => {
       if (parsed.telegramConfig) telegramConfig.value = { ...telegramConfig.value, ...parsed.telegramConfig };
       if (parsed.smtpConfig) smtpConfig.value = { ...smtpConfig.value, ...parsed.smtpConfig };
       if (Array.isArray(parsed.shippingZones)) shippingZones.value = parsed.shippingZones;
+      if (Array.isArray(parsed.coupons)) coupons.value = parsed.coupons;
       if (parsed.restaurantConfig) restaurantConfig.value = { ...restaurantConfig.value, ...parsed.restaurantConfig };
       if (parsed.webshopConfig) webshopConfig.value = { ...webshopConfig.value, ...parsed.webshopConfig };
       if (Array.isArray(parsed.products)) products.value = parsed.products;
@@ -215,7 +243,7 @@ onMounted(() => {
 });
 
 watch(
-  [lang, store, stripeConfig, telegramConfig, smtpConfig, shippingZones, restaurantConfig, webshopConfig, products, orders],
+  [lang, store, stripeConfig, telegramConfig, smtpConfig, shippingZones, coupons, restaurantConfig, webshopConfig, products, orders],
   () => {
     try {
       localStorage.setItem(
@@ -227,6 +255,7 @@ watch(
           telegramConfig: telegramConfig.value,
           smtpConfig: smtpConfig.value,
           shippingZones: shippingZones.value,
+          coupons: coupons.value,
           restaurantConfig: restaurantConfig.value,
           webshopConfig: webshopConfig.value,
           products: products.value,
@@ -435,11 +464,66 @@ const deleteShippingZone = (id) => {
   showToast(t.value.savedToast);
 };
 
+const handleImageUpload = (event, target) => {
+  const file = event?.target?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const dataUrl = String(reader.result || '');
+    if (target === 'logo') store.value.logoUrl = dataUrl;
+    else if (target === 'banner') store.value.bannerUrl = dataUrl;
+    else if (target === 'product') productForm.value.image = dataUrl;
+    showToast(t.value.savedToast);
+  };
+  reader.readAsDataURL(file);
+};
+
+const onCountryChange = (countryId) => {
+  store.value.country = countryId;
+  const match = STORE_COUNTRIES.find((c) => c.id === countryId);
+  if (match) {
+    store.value.currency = match.currency;
+    if (!store.value.storefrontLangs.includes(match.lang)) {
+      store.value.storefrontLangs = [...store.value.storefrontLangs, match.lang];
+    }
+  }
+};
+
+const toggleStorefrontLang = (code) => {
+  if (store.value.storefrontLangs.includes(code)) {
+    if (store.value.storefrontLangs.length <= 1) return;
+    store.value.storefrontLangs = store.value.storefrontLangs.filter((c) => c !== code);
+  } else {
+    store.value.storefrontLangs = [...store.value.storefrontLangs, code];
+  }
+};
+
+const addCouponItem = () => {
+  const code = couponForm.value.code.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+  const percent = Number(couponForm.value.percent);
+  if (!code || Number.isNaN(percent) || percent <= 0 || percent > 90) return;
+  coupons.value = [{ id: `CPN-${Date.now()}`, code, percent, active: true }, ...coupons.value];
+  couponForm.value = { code: '', percent: '' };
+  showCouponForm.value = false;
+  showToast(t.value.savedToast);
+};
+
+const toggleCoupon = (id) => {
+  coupons.value = coupons.value.map((c) => (c.id === id ? { ...c, active: !c.active } : c));
+  showToast(t.value.savedToast);
+};
+
+const deleteCoupon = (id) => {
+  coupons.value = coupons.value.filter((c) => c.id !== id);
+  showToast(t.value.savedToast);
+};
+
 const primaryNav = computed(() => [
   { id: 'overview', label: t.value.navOverview, icon: LayoutDashboard },
   { id: 'orders', label: t.value.navOrders, icon: ShoppingBag, badge: activeOrdersCount.value },
   { id: 'products', label: t.value.navProducts, icon: Package, badge: products.value.length },
   { id: 'customers', label: t.value.navCustomers, icon: Users, badge: customersList.value.length },
+  { id: 'coupons', label: t.value.navCoupons, icon: Tag, badge: coupons.value.length },
 ]);
 
 const setupNav = computed(() => [
@@ -485,8 +569,12 @@ const selectTab = (id) => {
         <!-- Brand & Collapse Toggle -->
         <div :class="['flex items-center px-1', sidebarCollapsed ? 'lg:justify-center justify-between' : 'justify-between']">
           <div class="flex items-center gap-3 min-w-0">
-            <div class="h-9 w-9 rounded-2xl bg-[#0066CC] text-white flex items-center justify-center font-extrabold text-xs shrink-0 shadow-[0_4px_12px_rgba(0,102,204,0.25)]">
-              SP
+            <div
+              class="h-9 w-9 rounded-2xl text-white flex items-center justify-center font-extrabold text-xs shrink-0 overflow-hidden shadow-[0_4px_12px_rgba(0,102,204,0.25)]"
+              :style="{ backgroundColor: store.brandColor || '#0066CC' }"
+            >
+              <img v-if="store.logoUrl" :src="store.logoUrl" :alt="store.name" class="h-full w-full object-cover" />
+              <span v-else>SP</span>
             </div>
             <div v-if="!sidebarCollapsed" class="min-w-0">
               <div class="text-sm font-extrabold tracking-tight text-[#1D1D1F] truncate">Seller pannel</div>
@@ -1016,12 +1104,19 @@ const selectTab = (id) => {
               </div>
               <div class="sm:col-span-2">
                 <label class="block text-[11px] font-bold text-[#6E6E73] mb-1">{{ t.imageUrl }}</label>
-                <input
-                  v-model="productForm.image"
-                  type="url"
-                  placeholder="https://..."
-                  class="w-full h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono"
-                />
+                <div class="flex gap-2">
+                  <input
+                    v-model="productForm.image"
+                    type="text"
+                    placeholder="https://..."
+                    class="flex-1 h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono"
+                  />
+                  <label class="h-10 px-3.5 rounded-xl bg-white hover:bg-[#ECECEF] border border-[#D2D2D7] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shrink-0">
+                    <Upload :size="13" />
+                    <span>{{ t.uploadImage }}</span>
+                    <input type="file" accept="image/*" class="hidden" @change="handleImageUpload($event, 'product')" />
+                  </label>
+                </div>
               </div>
               <div class="sm:col-span-2 lg:col-span-4 flex justify-end gap-2">
                 <button
@@ -1107,6 +1202,81 @@ const selectTab = (id) => {
                 <div class="flex items-center gap-4 text-xs">
                   <span class="text-[#6E6E73]">{{ t.ordersCount }}: <strong class="text-[#1D1D1F] tabular-nums">{{ c.ordersCount }}</strong></span>
                   <span class="font-extrabold tabular-nums text-[#0066CC]">{{ c.totalSpent }} {{ store.currency }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- COUPONS TAB -->
+        <template v-else-if="activeTab === 'coupons'">
+          <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-5 space-y-4 max-w-3xl">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navCoupons }} ({{ coupons.length }})</h2>
+              <button
+                type="button"
+                class="h-9 px-4 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                @click="showCouponForm = !showCouponForm"
+              >
+                <Plus :size="14" />
+                <span>{{ t.addCoupon }}</span>
+              </button>
+            </div>
+
+            <form
+              v-if="showCouponForm"
+              class="p-4 rounded-2xl bg-[#F5F5F7] border border-[#E5E5EA] grid grid-cols-1 sm:grid-cols-3 gap-3"
+              @submit.prevent="addCouponItem"
+            >
+              <input
+                v-model="couponForm.code"
+                type="text"
+                required
+                :placeholder="t.couponCode"
+                class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono uppercase"
+              />
+              <input
+                v-model="couponForm.percent"
+                type="number"
+                min="1"
+                max="90"
+                required
+                :placeholder="t.discountPercent"
+                class="h-10 rounded-xl bg-white border border-[#D2D2D7] px-3 text-xs font-mono"
+              />
+              <button type="submit" class="h-10 rounded-xl bg-[#0066CC] text-white text-xs font-bold cursor-pointer">
+                {{ t.save }}
+              </button>
+            </form>
+
+            <div class="divide-y divide-[#E5E5EA] border border-[#E5E5EA] rounded-2xl overflow-hidden bg-white">
+              <div
+                v-for="c in coupons"
+                :key="c.id"
+                class="p-4 flex items-center justify-between gap-3"
+              >
+                <div class="flex items-center gap-3">
+                  <span class="font-mono text-xs font-extrabold px-2.5 py-1 rounded-lg bg-[#F5F5F7] border border-[#E5E5EA]">{{ c.code }}</span>
+                  <span class="text-xs font-bold text-[#0066CC]">-{{ c.percent }}%</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    :class="[
+                      'h-8 px-3 rounded-full text-[11px] font-bold border cursor-pointer',
+                      c.active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-stone-100 text-stone-600 border-stone-200'
+                    ]"
+                    @click="toggleCoupon(c.id)"
+                  >
+                    {{ c.active ? t.available : t.unavailable }}
+                  </button>
+                  <button
+                    type="button"
+                    class="h-8 w-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center cursor-pointer"
+                    @click="deleteCoupon(c.id)"
+                  >
+                    <Trash2 :size="13" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -1329,6 +1499,137 @@ const selectTab = (id) => {
         <!-- SETTINGS TAB -->
         <template v-else-if="activeTab === 'settings'">
           <div class="space-y-5 max-w-3xl">
+            <!-- Logo & Branding Upload -->
+            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.brandingTitle }}</h2>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <!-- Logo Upload -->
+                <div class="space-y-2.5">
+                  <label class="block text-xs font-bold text-[#1D1D1F]">{{ t.uploadLogo }}</label>
+                  <div class="flex items-center gap-3">
+                    <div
+                      class="h-16 w-16 rounded-2xl border border-[#E5E5EA] bg-[#F5F5F7] overflow-hidden flex items-center justify-center shrink-0 font-extrabold text-sm text-white"
+                      :style="{ backgroundColor: store.logoUrl ? '#F5F5F7' : (store.brandColor || '#0066CC') }"
+                    >
+                      <img v-if="store.logoUrl" :src="store.logoUrl" :alt="store.name" class="h-full w-full object-cover" />
+                      <span v-else>SP</span>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                      <label class="h-9 px-3.5 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer">
+                        <Upload :size="13" />
+                        <span>{{ t.uploadLogo }}</span>
+                        <input type="file" accept="image/*" class="hidden" @change="handleImageUpload($event, 'logo')" />
+                      </label>
+                      <button
+                        v-if="store.logoUrl"
+                        type="button"
+                        class="h-9 px-3 rounded-full bg-rose-50 text-rose-600 text-xs font-semibold cursor-pointer"
+                        @click="store.logoUrl = ''; showToast(t.savedToast)"
+                      >
+                        {{ t.remove }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Brand Color -->
+                <div class="space-y-2.5">
+                  <label class="block text-xs font-bold text-[#1D1D1F]">{{ t.brandColor }}</label>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <button
+                      v-for="clr in ['#0066CC', '#1D1D1F', '#059669', '#DC2626', '#D97706']"
+                      :key="clr"
+                      type="button"
+                      class="h-8 w-8 rounded-full border-2 cursor-pointer transition-transform"
+                      :class="store.brandColor === clr ? 'border-[#1D1D1F] scale-110' : 'border-white'"
+                      :style="{ backgroundColor: clr }"
+                      @click="store.brandColor = clr; showToast(t.savedToast)"
+                    />
+                    <input
+                      v-model="store.brandColor"
+                      type="color"
+                      class="h-8 w-10 rounded-lg border border-[#E5E5EA] bg-white cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <!-- Cover Banner Upload -->
+                <div class="sm:col-span-2 space-y-2.5">
+                  <label class="block text-xs font-bold text-[#1D1D1F]">{{ t.uploadBanner }}</label>
+                  <div v-if="store.bannerUrl" class="relative h-32 w-full rounded-2xl overflow-hidden border border-[#E5E5EA] bg-[#F5F5F7]">
+                    <img :src="store.bannerUrl" :alt="store.name" class="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      class="absolute top-2 right-2 h-8 px-3 rounded-full bg-black/70 text-white text-xs font-semibold cursor-pointer"
+                      @click="store.bannerUrl = ''; showToast(t.savedToast)"
+                    >
+                      {{ t.remove }}
+                    </button>
+                  </div>
+                  <label class="h-10 px-4 rounded-full bg-[#F5F5F7] hover:bg-[#ECECEF] border border-[#E5E5EA] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer">
+                    <Upload :size="14" />
+                    <span>{{ t.uploadBanner }}</span>
+                    <input type="file" accept="image/*" class="hidden" @change="handleImageUpload($event, 'banner')" />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Country, Storefront Languages & Currency -->
+            <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
+              <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.countryCurrencyTitle }}</h2>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.country }}</label>
+                  <select
+                    :value="store.country"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
+                    @change="onCountryChange($event.target.value)"
+                  >
+                    <option v-for="c in STORE_COUNTRIES" :key="c.id" :value="c.id">{{ c.name }}</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.currency }}</label>
+                  <select
+                    v-model="store.currency"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3 text-xs font-semibold"
+                  >
+                    <option value="SEK">SEK</option>
+                    <option value="NOK">NOK</option>
+                    <option value="DKK">DKK</option>
+                    <option value="EUR">EUR</option>
+                  </select>
+                </div>
+                <div class="sm:col-span-2 space-y-2">
+                  <label class="block text-xs font-bold text-[#1D1D1F]">{{ t.storefrontLangs }}</label>
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      v-for="l in SELLER_LANGUAGES"
+                      :key="l.code"
+                      type="button"
+                      :class="[
+                        'h-9 px-3.5 rounded-full text-xs font-semibold border cursor-pointer transition-colors',
+                        store.storefrontLangs.includes(l.code)
+                          ? 'bg-[#0066CC] text-white border-[#0066CC]'
+                          : 'bg-[#F5F5F7] text-[#515154] border-[#E5E5EA]'
+                      ]"
+                      @click="toggleStorefrontLang(l.code)"
+                    >
+                      {{ l.flag }} {{ l.label }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="h-10 px-6 rounded-full bg-[#0066CC] hover:bg-[#0055AA] text-white text-xs font-bold cursor-pointer"
+                @click="showToast(t.savedToast)"
+              >
+                {{ t.save }}
+              </button>
+            </div>
+
             <!-- General Store & Business Type Selector -->
             <div class="rounded-2xl bg-[#FBFBFC] border border-[#E5E5EA] p-6 space-y-5">
               <h2 class="text-base font-extrabold text-[#1D1D1F]">{{ t.navSettings }}</h2>
@@ -1367,10 +1668,34 @@ const selectTab = (id) => {
                     class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
                   />
                 </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.orgNumber }}</label>
+                  <input
+                    v-model="store.orgNumber"
+                    type="text"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.instagram }}</label>
+                  <input
+                    v-model="store.instagram"
+                    type="text"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs"
+                  />
+                </div>
                 <div class="sm:col-span-2">
                   <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.address }}</label>
                   <input
                     v-model="store.address"
+                    type="text"
+                    class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs"
+                  />
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-bold text-[#1D1D1F] mb-1.5">{{ t.receiptNote }}</label>
+                  <input
+                    v-model="store.receiptNote"
                     type="text"
                     class="w-full h-11 rounded-xl bg-[#F5F5F7] border border-[#D2D2D7] px-3.5 text-xs"
                   />
